@@ -1,0 +1,3762 @@
+<!-- portafolio-horizontal v0.8 -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portafolio MetodologIA 2026 - v9.1 Delta Expandido</title>
+    
+    <!-- Optimización: Preconnect y Preload críticos -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Scripts esenciales -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollToPlugin.min.js" defer></script>
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+    
+    <!-- CTA System v0.9 -->
+    <script>
+        // CTA Registry System - SSOT-DRY Model
+        let ctaRegistry = {};
+        const WHITELISTED_DOMAINS = [
+            'metodologia.info',
+            'metodologia.camp',
+            'calendar.google.com',
+            'mailto:contacto@metodologia.info'
+        ];
+        
+        // Load CTA Registry
+        async function loadCTARegistry() {
+            try {
+                const response = await fetch('./ctas-v0.9.json');
+                ctaRegistry = await response.json();
+                console.log('CTA Registry loaded:', ctaRegistry.ctas ? Object.keys(ctaRegistry.ctas).length : 0, 'CTAs');
+            } catch (error) {
+                console.warn('CTA Registry not found, using fallback:', error.message);
+                // Fallback registry for development
+                ctaRegistry = {
+                    ctas: {
+                        "contacto.solicitar_info.primary": {
+                            texto: "Solicitar + información",
+                            href: "mailto:contacto@metodologia.info",
+                            params: { subject: "Quiero mas informacion de {service}" }
+                        },
+                        "modal.conocer_mas.primary": {
+                            texto: "Ver detalles",
+                            action: "openServiceModal"
+                        },
+                        "global.agendar.primary": {
+                            texto: "Agendar consulta",
+                            href: "https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB"
+                        }
+                    }
+                };
+            }
+        }
+        
+        // CTA Resolver Function
+        function resolveCTA(ctaId, element) {
+            const cta = ctaRegistry.ctas?.[ctaId];
+            if (!cta) {
+                console.warn(`CTA not found: ${ctaId}`);
+                return createFallbackCTA(ctaId);
+            }
+            
+            // Dynamic parameter replacement
+            let href = cta.href;
+            let params = cta.params || {};
+            
+            if (element) {
+                const serviceId = element.dataset.serviceId;
+                const serviceName = element.dataset.serviceName;
+                const context = element.dataset.context;
+                
+                if (href && href.includes('{service}')) {
+                    href = href.replace('{service}', serviceName || serviceId || 'servicio');
+                }
+                if (href && href.includes('{service-id}')) {
+                    href = href.replace('{service-id}', serviceId || 'general');
+                }
+                if (params.subject && params.subject.includes('{service-name}')) {
+                    params.subject = params.subject.replace('{service-name}', serviceName || serviceId || 'servicio');
+                }
+            }
+            
+            return { ...cta, href, params };
+        }
+        
+        // Create Action Handler
+        function createActionHandler(cta, element) {
+            if (cta.action === 'openServiceModal') {
+                const serviceId = element?.dataset.serviceId;
+                if (serviceId) {
+                    openServiceModal(serviceId);
+                }
+            } else if (cta.action === 'navigateSlide') {
+                const direction = cta.params?.direction;
+                if (direction === 'prev') {
+                    previousSlide();
+                } else if (direction === 'next') {
+                    nextSlide();
+                }
+            } else if (cta.action === 'togglePresenterMode') {
+                togglePresenterMode();
+            } else if (cta.action === 'closeModal') {
+                closeModal();
+            }
+        }
+        
+        // Security: Domain Whitelist
+        function isExternalLink(href) {
+            return href && (href.startsWith('http') || href.startsWith('mailto'));
+        }
+        
+        function isWhitelisted(href) {
+            if (!href) return false;
+            return WHITELISTED_DOMAINS.some(domain => href.includes(domain));
+        }
+        
+        // Fallback CTA
+        function createFallbackCTA(ctaId) {
+            return {
+                texto: "Acción",
+                href: "#",
+                variant: "secondary",
+                size: "md"
+            };
+        }
+        
+        // Tracking Events
+        function trackCTAEvent(eventType, trackingKey, payload = {}) {
+            if (typeof gtag !== 'undefined') {
+                gtag('event', eventType, {
+                    event_category: 'CTA',
+                    event_label: trackingKey,
+                    ...payload
+                });
+            }
+            console.log('CTA Event:', eventType, trackingKey, payload);
+        }
+        
+        // Event Delegation for CTAs
+        function setupCTADelegation() {
+            document.addEventListener('click', (ev) => {
+                const target = ev.target.closest('[data-cta-id]');
+                if (!target) return;
+                
+                ev.preventDefault();
+                const ctaId = target.dataset.ctaId;
+                const cta = resolveCTA(ctaId, target);
+                
+                if (cta.href && isExternalLink(cta.href)) {
+                    if (isWhitelisted(cta.href)) {
+                        // Build mailto with parameters
+                        if (cta.href.startsWith('mailto:')) {
+                            let mailtoUrl = cta.href;
+                            if (cta.params?.subject) {
+                                mailtoUrl += `?subject=${encodeURIComponent(cta.params.subject)}`;
+                                if (cta.params?.body) {
+                                    mailtoUrl += `&body=${encodeURIComponent(cta.params.body)}`;
+                                }
+                            }
+                            window.open(mailtoUrl, '_blank');
+                        } else {
+                            window.open(cta.href, '_blank', 'noopener,noreferrer');
+                        }
+                        trackCTAEvent('click', cta.trackingKey || 'external_link', { url: cta.href });
+                    } else {
+                        console.warn('External link not whitelisted:', cta.href);
+                    }
+                } else if (cta.action) {
+                    createActionHandler(cta, target);
+                    trackCTAEvent('click', cta.trackingKey || 'action', { action: cta.action });
+                }
+            });
+        }
+        
+        // Initialize CTA System
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadCTARegistry();
+            setupCTADelegation();
+        });
+    </script>
+    
+    <meta name="theme-color" content="#0A122A">
+    <meta name="description" content="Portafolio completo de servicios MetodologIA 2026 v0.8 Horizontal - (R)Evolución, Bootcamps, Implantación, IA Aplicada, Consultoría, Workshops, Contacto">
+    
+    <style>
+        :root {
+            /* Design Tokens v6.0 - Fibonacci + Golden Ratio */
+            --brand-blue-dark: #0A122A;
+            --brand-yellow: #FFD700;
+            --brand-white: #FFFFFF;
+            --brand-gray: #B0C4DE;
+            --brand-ai-highlight: #00FFFF; /* Cyan para IA - SIN blur */
+            --brand-ai-glow: rgba(0, 255, 255, 0.3);
+            
+            /* Extended Palette */
+            --text-primary: #FFFFFF;
+            --text-secondary: #B0C4DE;
+            --text-muted: #8892B0;
+            --surface-glass: rgba(255, 255, 255, 0.08);
+            --surface-glass-hover: rgba(255, 255, 255, 0.12);
+            --border-subtle: rgba(255, 255, 255, 0.1);
+            --border-bright: rgba(255, 215, 0, 0.3);
+            
+            /* Status Colors */
+            --success: #36B37E;
+            --warning: #FFC107;
+            --info: #17A2B8;
+            
+            /* Fibonacci Spacing System */
+            --space-xs: 0.382rem;    /* φ⁻² */
+            --space-sm: 0.618rem;    /* φ⁻¹ */
+            --space-md: 1rem;        /* φ⁰ */
+            --space-lg: 1.618rem;    /* φ¹ */
+            --space-xl: 2.618rem;    /* φ² */
+            --space-xxl: 4.236rem;   /* φ³ */
+            
+            /* Golden Ratio Layout */
+            --ratio-minor: 0.618;
+            --ratio-major: 1.618;
+            --ratio-content: 0.85;
+            
+            /* Shadows & Effects */
+            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+            --shadow-lg: 0 8px 25px rgba(0, 0, 0, 0.2);
+            --shadow-xl: 0 12px 35px rgba(0, 0, 0, 0.25);
+            
+            /* Transitions */
+            --transition-fast: 150ms ease-out;
+            --transition-normal: 250ms ease-out;
+            --transition-slow: 350ms ease-out;
+            --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            font-size: 16px;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, var(--brand-blue-dark) 0%, #1a2332 50%, var(--brand-blue-dark) 100%);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            line-height: 1.618; /* Golden ratio line-height */
+        }
+
+        /* Typography - Poppins para headings, Inter para body */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+            line-height: 1.2;
+            margin-bottom: var(--space-sm);
+        }
+
+        h1 { font-size: 3.5rem; font-weight: 700; }
+        h2 { font-size: 2.5rem; font-weight: 600; }
+        h3 { font-size: 1.875rem; font-weight: 600; }
+        h4 { font-size: 1.5rem; font-weight: 500; }
+
+        /* Fixed Header */
+        .header-fixed {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            background: rgba(10, 18, 42, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-subtle);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 var(--space-xl);
+            transition: all var(--transition-normal);
+        }
+
+        .header-fixed.scrolled {
+            background: rgba(10, 18, 42, 0.98);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+            font-size: 1.25rem;
+            color: var(--brand-yellow);
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--surface-glass);
+            border: 2px solid var(--brand-yellow);
+            border-radius: 8px;
+            box-shadow: var(--shadow-md);
+        }
+
+        /* Header Controls */
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+
+        /* Carousel Container */
+        .carousel-container {
+            height: calc(100vh - 70px);
+            margin-top: 70px;
+            overflow: hidden;
+            position: relative;
+            background: var(--brand-blue-dark);
+        }
+
+        .carousel-track {
+            display: flex;
+            height: 100%;
+            width: calc(100% * 8); /* 8 slides */
+            transition: transform var(--transition-slow) var(--ease-bounce);
+        }
+
+        .slide {
+            width: calc(100% / 8);
+            height: 100%;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: var(--space-xl);
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        .slide::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, 
+                rgba(10, 18, 42, 0.92) 0%, 
+                rgba(27, 41, 81, 0.88) 100%);
+            z-index: 1;
+        }
+
+        .slide-content {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            max-width: 1200px;
+            width: 100%;
+            animation: fadeInUp 1s ease-out;
+        }
+
+        /* Slide Títulos con Golden Ratio */
+        .slide-title {
+            font-size: clamp(1.875rem, 5vw, 3rem);
+            margin-bottom: var(--space-lg);
+            background: linear-gradient(135deg, var(--text-primary) 0%, #FFF3A0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .slide-subtitle {
+            font-size: clamp(1.125rem, 2vw, 1.25rem);
+            color: var(--text-secondary);
+            max-width: 800px;
+            margin: 0 auto var(--space-xl);
+            line-height: var(--ratio-major);
+        }
+
+        .punchline {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+            font-size: clamp(1.125rem, 1.8vw, 1.75rem);
+            color: var(--brand-yellow);
+            text-align: center;
+            margin-top: var(--space-xxl);
+            padding: var(--space-lg);
+            background: var(--surface-glass);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Slide Backgrounds - Imágenes removidas */
+
+        /* Navigation Controls */
+        .nav-control {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 60px;
+            height: 60px;
+            background: var(--surface-glass);
+            border: 1px solid var(--border-subtle);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 100;
+            transition: all var(--transition-normal);
+            backdrop-filter: blur(20px);
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .carousel-container:hover .nav-control {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .nav-control:hover {
+            background: var(--surface-glass-hover);
+            border-color: var(--brand-yellow);
+            transform: translateY(-50%) scale(1.1);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .nav-control.prev { left: var(--space-xl); }
+        .nav-control.next { right: var(--space-xl); }
+
+        /* Glass Cards con Golden Ratio proportions */
+        .glass-card {
+            background: var(--surface-glass);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            padding: var(--space-xl);
+            text-align: left;
+            transition: all var(--transition-normal);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(255, 255, 255, 0.2);
+            background: var(--surface-glass-hover);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            margin-bottom: var(--space-md);
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .card-description {
+            color: var(--text-secondary);
+            flex-grow: 1;
+            line-height: var(--ratio-major);
+        }
+
+        /* Service Cards */
+        .service-card {
+            background: var(--surface-glass);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: var(--space-lg);
+            text-align: left;
+            transition: all var(--transition-normal);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .service-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--border-bright);
+            box-shadow: var(--shadow-lg);
+            background: var(--surface-glass-hover);
+        }
+
+        .service-title {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+            color: var(--brand-yellow);
+            margin-bottom: var(--space-sm);
+            font-size: 1.1rem;
+        }
+
+        .service-description {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: var(--ratio-major);
+            margin-bottom: var(--space-md);
+        }
+
+        .service-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border-subtle);
+            padding-top: var(--space-sm);
+        }
+
+        .service-duration {
+            color: var(--info);
+            font-weight: 500;
+        }
+
+        .service-target {
+            color: var(--brand-ai-highlight);
+            font-weight: 500;
+        }
+
+        /* Buttons con Fibonacci spacing */
+        .btn {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+            border-radius: 50px;
+            transition: all var(--transition-normal);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-sm);
+            padding: var(--space-sm) var(--space-xl);
+            text-decoration: none;
+            cursor: pointer;
+            font-size: 0.875rem;
+            border: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--brand-yellow) 0%, #FFA500 100%);
+            color: var(--brand-blue-dark);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(255, 215, 0, 0.2);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--brand-yellow);
+            border: 1px solid var(--brand-yellow);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 215, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        /* Modal System */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-normal);
+            backdrop-filter: blur(10px);
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background: var(--brand-blue-dark);
+            border: 1px solid var(--border-bright);
+            border-radius: 20px;
+            padding: var(--space-xl);
+            max-width: 900px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            transform: scale(0.8) translateY(50px);
+            transition: all var(--transition-normal);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: scale(1) translateY(0);
+        }
+
+        /* Grid Layouts con Golden Ratio */
+        .service-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--space-xl);
+            width: 100%;
+            margin-top: var(--space-xxl);
+            position: relative;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--space-xl);
+            width: 100%;
+            margin-top: var(--space-xxl);
+            position: relative;
+        }
+
+        /* MetodologIA Branding */
+        .metodologia-brand {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+        }
+
+        .metodologia-ia {
+            color: var(--brand-ai-highlight);
+            font-weight: 800;
+            text-shadow: 0 0 3px rgba(0, 255, 255, 0.4);
+            position: relative;
+            border-radius: 2px;
+            padding: 0 2px;
+            background: rgba(0, 255, 255, 0.08);
+        }
+
+        .metodologia-ia::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: var(--brand-ai-highlight);
+            opacity: 0.8;
+        }
+
+        /* Text Highlighting */
+        .text-highlight {
+            color: var(--brand-yellow);
+            font-weight: 700;
+        }
+
+        /* Service Category Headers */
+        .category-header {
+            background: linear-gradient(135deg, var(--brand-yellow) 0%, #FFA500 100%);
+            color: var(--brand-blue-dark);
+            padding: var(--space-md) var(--space-lg);
+            border-radius: 12px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: var(--space-xl);
+            box-shadow: var(--shadow-md);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* Service Timeline */
+        .service-timeline {
+            position: relative;
+            padding-left: var(--space-xl);
+        }
+
+        .service-timeline::before {
+            content: '';
+            position: absolute;
+            left: var(--space-sm);
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, var(--brand-yellow), var(--brand-ai-highlight));
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: var(--space-xl);
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: calc(-1 * var(--space-xl) + var(--space-xs));
+            top: var(--space-sm);
+            width: 12px;
+            height: 12px;
+            background: var(--brand-yellow);
+            border-radius: 50%;
+            border: 3px solid var(--brand-blue-dark);
+        }
+
+        /* Atomic Design System - Program Cards Layout */
+        .program-grid-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: var(--space-xl);
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 var(--space-lg);
+        }
+
+        .program-card-unified {
+            background: var(--surface-glass);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            padding: var(--space-xl);
+            backdrop-filter: blur(15px);
+            transition: all var(--transition-normal);
+            height: fit-content;
+        }
+
+        .program-card-unified:hover {
+            transform: translateY(-3px);
+            border-color: var(--border-bright);
+            background: var(--surface-glass-hover);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .program-card-standard {
+            background: var(--surface-glass);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: var(--space-lg);
+            backdrop-filter: blur(10px);
+            transition: all var(--transition-normal);
+            margin-bottom: var(--space-lg);
+        }
+
+        .program-card-standard:hover {
+            transform: translateY(-2px);
+            border-color: var(--border-bright);
+            background: var(--surface-glass-hover);
+        }
+
+        .program-title-main {
+            font-family: 'Poppins', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--brand-yellow);
+            margin-bottom: var(--space-lg);
+            text-align: center;
+        }
+
+        .program-description-main {
+            color: var(--text-secondary);
+            text-align: center;
+            margin-bottom: var(--space-xl);
+            line-height: var(--ratio-major);
+        }
+
+        .modality-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-md);
+            margin: var(--space-lg) 0;
+            padding: var(--space-lg);
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .modality-item {
+            text-align: center;
+            padding: var(--space-sm);
+        }
+
+        .modality-icon {
+            font-size: 1.5rem;
+            margin-bottom: var(--space-xs);
+        }
+
+        .modality-title {
+            color: var(--brand-yellow);
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: var(--space-xs);
+        }
+
+        .modality-description {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .modality-duration {
+            font-size: 0.75rem;
+            color: var(--info);
+            margin-top: var(--space-xs);
+            font-weight: 500;
+        }
+
+        .program-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-lg);
+        }
+
+        .program-title-standard {
+            font-family: 'Poppins', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--brand-yellow);
+            margin-bottom: var(--space-md);
+        }
+
+        .program-description-standard {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: var(--ratio-major);
+            margin-bottom: var(--space-md);
+        }
+
+        .program-meta-inline {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-lg);
+            font-size: 0.85rem;
+        }
+
+        .program-duration {
+            color: var(--info);
+            font-weight: 500;
+        }
+
+        .program-target {
+            color: var(--brand-ai-highlight);
+            font-weight: 500;
+        }
+
+        .program-cta-container {
+            text-align: center;
+        }
+
+        .btn-program {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+            border-radius: 25px;
+            transition: all var(--transition-normal);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-sm);
+            padding: var(--space-sm) var(--space-lg);
+            text-decoration: none;
+            cursor: pointer;
+            font-size: 0.85rem;
+            border: none;
+            background: linear-gradient(135deg, var(--brand-yellow) 0%, #FFA500 100%);
+            color: var(--brand-blue-dark);
+            box-shadow: var(--shadow-md);
+            width: 100%;
+        }
+
+        .btn-program:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(255, 215, 0, 0.3);
+        }
+
+        /* Responsive optimizations for 1280px screens */
+        @media (max-width: 1280px) {
+            .program-grid-container {
+                max-width: 1200px;
+                padding: 0 var(--space-md);
+                gap: var(--space-lg);
+            }
+            
+            .modality-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: var(--space-sm);
+                padding: var(--space-md);
+            }
+            
+            .modality-description {
+                font-size: 0.75rem;
+            }
+            
+            .program-card-unified {
+                padding: var(--space-lg);
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .program-grid-container {
+                grid-template-columns: 1fr;
+                gap: var(--space-lg);
+            }
+            
+            .modality-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .modality-grid {
+                grid-template-columns: 1fr;
+                gap: var(--space-md);
+            }
+        }
+
+        /* Service Modal System */
+        .service-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-normal);
+            backdrop-filter: blur(15px);
+        }
+
+        .service-modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .service-modal-content {
+            background: linear-gradient(135deg, var(--brand-blue-dark) 0%, #1a2332 100%);
+            border: 2px solid var(--brand-yellow);
+            border-radius: 24px;
+            padding: var(--space-xxl);
+            max-width: 800px;
+            width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
+            transform: scale(0.7) translateY(50px);
+            transition: all var(--transition-normal);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        .service-modal-overlay.active .service-modal-content {
+            transform: scale(1) translateY(0);
+        }
+
+        .modal-close-btn {
+            position: absolute;
+            top: var(--space-lg);
+            right: var(--space-lg);
+            background: var(--surface-glass);
+            border: 1px solid var(--border-subtle);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-primary);
+            transition: all var(--transition-normal);
+            backdrop-filter: blur(10px);
+        }
+
+        .modal-close-btn:hover {
+            background: var(--surface-glass-hover);
+            border-color: var(--brand-yellow);
+            transform: scale(1.1);
+        }
+
+        .modal-title {
+            font-family: 'Poppins', sans-serif;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--brand-yellow);
+            margin-bottom: var(--space-lg);
+            background: linear-gradient(135deg, var(--brand-yellow) 0%, #FFA500 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .modal-section {
+            margin-bottom: var(--space-xl);
+        }
+
+        .modal-section-title {
+            font-family: 'Poppins', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: var(--space-md);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .modal-content-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-lg);
+            margin-bottom: var(--space-lg);
+        }
+
+        .modal-content-item {
+            background: var(--surface-glass);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: var(--space-lg);
+            backdrop-filter: blur(10px);
+        }
+
+        .modal-content-item h4 {
+            color: var(--brand-yellow);
+            font-weight: 600;
+            margin-bottom: var(--space-sm);
+            font-size: 1.1rem;
+        }
+
+        .modal-content-item p {
+            color: var(--text-secondary);
+            line-height: var(--ratio-major);
+            font-size: 0.95rem;
+        }
+
+        .modal-benefits-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .modal-benefits-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-md);
+            color: var(--text-secondary);
+            line-height: var(--ratio-major);
+        }
+
+        .modal-benefits-list .benefit-icon {
+            color: var(--brand-yellow);
+            font-weight: 600;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .modal-cta-section {
+            background: var(--surface-glass);
+            border: 1px solid var(--border-bright);
+            border-radius: 16px;
+            padding: var(--space-xl);
+            text-align: center;
+            margin-top: var(--space-xl);
+        }
+
+        .modal-cta-section h3 {
+            color: var(--brand-yellow);
+            margin-bottom: var(--space-md);
+        }
+
+        .modal-cta-section p {
+            color: var(--text-secondary);
+            margin-bottom: var(--space-lg);
+        }
+
+        .modal-cta-buttons {
+            display: flex;
+            gap: var(--space-md);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        /* Reduced Motion Support */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation: none !important;
+                transition-duration: 0.1s !important;
+            }
+        }
+
+        /* Responsive Design optimizado */
+        @media (max-width: 1280px) {
+            .header-fixed { 
+                padding: 0 var(--space-md); 
+            }
+            .slide { 
+                padding: var(--space-lg);
+            }
+            .slide-content {
+                max-width: 100%;
+                padding: 0 var(--space-md);
+            }
+            .service-grid {
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: var(--space-lg);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .service-grid {
+                grid-template-columns: 1fr;
+                gap: var(--space-lg);
+            }
+            .feature-grid { 
+                grid-template-columns: 1fr;
+                gap: var(--space-lg);
+            }
+            .slide { 
+                padding: var(--space-md);
+                justify-content: flex-start;
+                padding-top: var(--space-xxl);
+            }
+            .slide-content {
+                max-width: 100%;
+                padding: 0;
+            }
+            h1 { 
+                font-size: clamp(1.5rem, 6vw, 2rem);
+                line-height: 1.1;
+                margin-bottom: var(--space-md);
+            }
+            .service-card {
+                padding: var(--space-md);
+            }
+            .nav-control {
+                width: 50px;
+                height: 50px;
+            }
+            .nav-control.prev { left: var(--space-md); }
+            .nav-control.next { right: var(--space-md); }
+        }
+
+        @media (max-width: 480px) {
+            .slide {
+                padding: var(--space-sm);
+                padding-top: var(--space-xl);
+            }
+            .slide-content {
+                padding: 0;
+            }
+            .service-grid {
+                gap: var(--space-md);
+            }
+            .service-card {
+                padding: var(--space-sm);
+            }
+            .btn {
+                padding: var(--space-xs) var(--space-md);
+                font-size: 0.8rem;
+            }
+        }
+
+        /* Info Icon Button - Estándar MetodologIA */
+        .info-icon-btn {
+            background: rgba(255, 215, 0, 0.1);
+            border: 1px solid var(--brand-yellow);
+            border-radius: 50%;
+            width: 2rem;
+            height: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+        }
+
+        .info-icon-btn:hover {
+            background: var(--brand-yellow);
+            color: var(--brand-blue-dark);
+            transform: scale(1.1);
+        }
+
+        .info-icon-btn i {
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Fixed Header -->
+    <header class="header-fixed" id="header">
+        <div class="logo-container">
+            <div class="logo-icon"></div>
+            <span class="metodologia-brand">Metodolog<span class="metodologia-ia">IA</span></span>
+        </div>
+        
+        <div class="header-controls">
+            <button class="btn btn-secondary" onclick="togglePresenterMode()">
+                <i data-lucide="presentation" stroke-width="2"></i>
+                Presentar
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Carousel -->
+    <div class="carousel-container" id="carouselContainer">
+        <div class="carousel-track" id="carouselTrack">
+            
+            <!-- Slide 1: Introducción al Portafolio -->
+            <section class="slide" id="slide-0">
+                <div class="slide-content">
+                    <h1 class="slide-title">Portafolio <span class="text-highlight">Completo</span> 2026</h1>
+                    <p class="slide-subtitle">25+ experiencias segmentadas que transforman intención en acción con <span class="metodologia-brand">Metodolog<span class="metodologia-ia">IA</span></span> y tecnología aplicada</p>
+                    
+                    <div class="feature-grid">
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="graduation-cap" stroke-width="2" class="text-yellow-400"></i>
+                                <h3 class="card-title">4 Programas de (R)Evolución</h3>
+                            </div>
+                            <p class="card-description">1 programa principal de Empoderamiento + 3 programas especializados de 12-15 semanas con modalidades adaptadas por perfil y objetivos específicos.</p>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="goToSlide(1)">Ver programas</button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="zap" stroke-width="2" class="text-yellow-400"></i>
+                                <h3 class="card-title">6 Bootcamps Intensivos</h3>
+                            </div>
+                            <p class="card-description">Entrenamientos de 21 días que activan habilidades específicas con resultados inmediatos y práctica real.</p>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="goToSlide(3)">Ver bootcamps</button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="rocket" stroke-width="2" class="text-yellow-400"></i>
+                                <h3 class="card-title">Implantación Organizacional</h3>
+                            </div>
+                            <p class="card-description">Sprints de evolución y coaching personalizado para implementar cambios reales y sostenibles.</p>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="goToSlide(4)">Ver servicios</button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="brain" stroke-width="2" class="text-yellow-400"></i>
+                                <h3 class="card-title">Soluciones IA Aplicada</h3>
+                            </div>
+                            <p class="card-description">Asistentes inteligentes y agentes autónomos que operan 24/7 optimizando procesos específicos.</p>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="goToSlide(5)">Ver soluciones</button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="users" stroke-width="2" class="text-yellow-400"></i>
+                                <h3 class="card-title">Programas, Workshops y Charlas a la Medida</h3>
+                            </div>
+                            <p class="card-description">Experiencias en vivo desde 30 minutos hasta 1 semana que activan transformación cultural.</p>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="goToSlide(6)">Ver experiencias</button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="target" stroke-width="2" class="text-yellow-400"></i>
+                                <h3 class="card-title">Consultoría Estratégica</h3>
+                            </div>
+                            <p class="card-description">Diagnóstico cognitivo y planificación estratégica con IA para decisiones de alto impacto.</p>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="goToSlide(7)">Ver consultoría</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="punchline">Ecosistema completo con preventa consultiva gratuita, metodología probada y acompañamiento integral personalizado.</div>
+                </div>
+            </section>
+
+            <!-- Slide 2: Programa de Empoderamiento -->
+            <section class="slide" id="slide-1">
+                <div class="slide-content">
+                    <h1 class="slide-title">Programa de <span class="text-highlight">Empoderamiento</span></h1>
+                    <p class="slide-subtitle">Dominas IA con propósito, conectas con tu potencial único y rediseñas cómo operas, piensas y decides en tu contexto específico</p>
+                    
+                    <div class="category-header">(R)Evolución Extendida (12-15 semanas) - Programa Principal</div>
+                    
+                    <!-- Programa de Empoderamiento Centrado -->
+                    <div style="display: flex; justify-content: center; margin: var(--space-xl) 0;">
+                        <div class="program-card-unified" style="max-width: 900px; width: 100%;">
+                            <h3 class="program-title-main">Programa de Empoderamiento</h3>
+                            <p class="program-description-main">Dominas IA con propósito, conectas con tu potencial único y rediseñas cómo operas, piensas y decides en tu contexto específico.</p>
+                            
+                            <!-- Grid de Modalidades Optimizado -->
+                            <div class="modality-grid">
+                                <div class="modality-item">
+                                    <div class="modality-icon">👥</div>
+                                    <div class="modality-title">Profesionales</div>
+                                    <div class="modality-description">Empleados y freelance activos que rediseñan su operación sin interrumpir flujo laboral</div>
+                                    <div class="modality-duration">15 semanas</div>
+                                </div>
+                                
+                                <div class="modality-item">
+                                    <div class="modality-icon">🎓</div>
+                                    <div class="modality-title">Universitarios</div>
+                                    <div class="modality-description">Estudiantes que diseñan su primer proyecto de impacto real con propósito profesional</div>
+                                    <div class="modality-duration">15 semanas</div>
+                                </div>
+                                
+                                <div class="modality-item">
+                                    <div class="modality-icon">🏫</div>
+                                    <div class="modality-title">Secundaria</div>
+                                    <div class="modality-description">Jóvenes que descubren su potencial y definen su ruta vocacional estratégica</div>
+                                    <div class="modality-duration">12 semanas</div>
+                                </div>
+                                
+                                <div class="modality-item">
+                                    <div class="modality-icon">👑</div>
+                                    <div class="modality-title">Senior 50+</div>
+                                    <div class="modality-description">Profesionales experimentados que reinventan su carrera con sabiduría acumulada</div>
+                                    <div class="modality-duration">15 semanas</div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg" style="text-align: center; margin-top: var(--space-lg);">
+                                <span class="text-blue-400 text-sm font-medium">Para ti si quieres recuperar el control de tu carrera profesional</span>
+                            </div>
+                            
+                            <div class="program-cta-container">
+                                <button class="btn-program" onclick="openServiceModal('empoderamiento')">Conocer más</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="punchline">El programa principal que transforma profesionales con metodología adaptada a cada perfil y contexto específico.</div>
+                </div>
+            </section>
+
+            <!-- Slide 3: Otros Programas de (R)Evolución -->
+            <section class="slide" id="slide-2">
+                <div class="slide-content">
+                    <h1 class="slide-title">3 Programas <span class="text-highlight">Especializados</span></h1>
+                    <p class="slide-subtitle">Programas de (R)Evolución extendida para perfiles específicos y objetivos especializados</p>
+                    
+                    <div class="category-header">(R)Evolución Extendida (12-15 semanas) - Programas Especializados</div>
+                    
+                    <div class="feature-grid">
+                        <!-- Programa de Creación Digital -->
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="code" stroke-width="2" class="text-purple-400"></i>
+                                <h3 class="card-title">Programa de creación y transformación digital con IA</h3>
+                            </div>
+                            <p class="card-description mb-4">Desarrollas soluciones disruptivas combinando programación, IA generativa y visión estratégica para crear productos digitales innovadores.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">15 semanas</div>
+                                <div class="service-target">Developers y disruptores</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                                <span class="text-purple-400 text-sm font-medium">Desarrolla y programa soluciones disruptivas que generen valor económico real, para que tu código transforme industrias.</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('creacion-digital')">Conocer más</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Programa GerencIA -->
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="briefcase" stroke-width="2" class="text-cyan-400"></i>
+                                <h3 class="card-title">Programa GerencIA</h3>
+                            </div>
+                            <p class="card-description mb-4">Lideras con criterio estratégico, adaptabilidad e inteligencia artificial integrada a tu estilo de liderazgo único.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">12 semanas</div>
+                                <div class="service-target">Líderes y gerentes</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+                                <span class="text-cyan-400 text-sm font-medium">Lidera equipos con inteligencia artificial para crear entornos de abundancia y resultados extraordinarios, para que tu liderazgo transforme organizaciones.</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('gerencia')">Conocer más</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Programa ExperiencIA -->
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="palette" stroke-width="2" class="text-green-400"></i>
+                                <h3 class="card-title">Programa ExperiencIA y productos digitales</h3>
+                            </div>
+                            <p class="card-description mb-4">Diseñas experiencias y soluciones desde un enfoque neurodigital y estratégico para crear productos que impactan.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">15 semanas</div>
+                                <div class="service-target">UX/UI, innovación, diseño</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                                <span class="text-green-400 text-sm font-medium">Resuelve problemas reales y construye productos y servicios potenciados por IA, para que tu creatividad transforme el mundo.</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('experiencia')">Conocer más</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="punchline" style="text-align: center; margin-top: var(--space-xl);">
+                        3 programas especializados que completan el ecosistema de (R)Evolución para perfiles y contextos específicos.
+                    </div>
+                </div>
+            </section>
+
+            <!-- Slide 3: Bootcamps Intensivos -->
+            <section class="slide" id="slide-3">
+                <div class="slide-content">
+                    <h1 class="slide-title">6 Bootcamps <span class="text-highlight">Intensivos</span></h1>
+                    <p class="slide-subtitle">21 días de entrenamiento concentrado para activar habilidades específicas con resultados inmediatos</p>
+                    
+                    <div class="category-header">Bootcamps Intensivos (21 días)</div>
+                    
+                    <div class="feature-grid">
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="zap" stroke-width="2" class="text-yellow-400"></i>
+                                <h3 class="card-title">Bootcamp prompting engineering</h3>
+                            </div>
+                            <p class="card-description mb-4">Dominas el arte de comunicarte con IA para automatizar lo complejo y liberar tu tiempo para trabajo estratégico.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">21 días, 1h/día</div>
+                                <div class="service-target">Usuarios avanzados IA</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                <span class="text-yellow-400 text-sm font-medium">Para ti si quieres dominar IA como un experto</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('bootcamp-prompting')">Conocer más</button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="users" stroke-width="2" class="text-cyan-400"></i>
+                                <h3 class="card-title">Bootcamp liderazgo inspirador</h3>
+                            </div>
+                            <p class="card-description mb-4">Transformas tu estilo de liderazgo para crear equipos que se autoorganizan y entregan resultados excepcionales.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">21 días, 1h/día</div>
+                                <div class="service-target">Líderes emergentes</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+                                <span class="text-cyan-400 text-sm font-medium">Para ti si quieres inspirar, no controlar tu equipo</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('bootcamp-liderazgo')">Conocer más</button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="target" stroke-width="2" class="text-green-400"></i>
+                                <h3 class="card-title">Bootcamp productividad con IA</h3>
+                            </div>
+                            <p class="card-description mb-4">Rediseñas tu día para trabajar menos horas pero lograr más impacto usando sistemas inteligentes.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">21 días, 1h/día</div>
+                                <div class="service-target">Profesionales que buscan foco</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                                <span class="text-green-400 text-sm font-medium">Para ti si quieres trabajar menos y lograr más impacto</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('bootcamp-productividad')">Conocer más</button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="refresh-cw" stroke-width="2" class="text-purple-400"></i>
+                                <h3 class="card-title">Bootcamp mentalidad ágil</h3>
+                            </div>
+                            <p class="card-description mb-4">Implementas agilidad que funciona en el mundo real, no solo en teoría, para equipos de alto rendimiento.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">21 días, 1h/día</div>
+                                <div class="service-target">Facilitadores y miembros de equipos ágiles</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                                <span class="text-purple-400 text-sm font-medium">Para ti si quieres implementar agilidad que funcione de verdad</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('bootcamp-agil')">Conocer más</button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="monitor" stroke-width="2" class="text-blue-400"></i>
+                                <h3 class="card-title">Google Workspace + Gemini + NotebookLM</h3>
+                            </div>
+                            <p class="card-description mb-4">Conviertes Google Workspace en tu sistema operativo de productividad con IA integrada para resultados exponenciales.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">21 días, 1h/día</div>
+                                <div class="service-target">Equipos organizacionales</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                                <span class="text-blue-400 text-sm font-medium">Para ti si quieres potenciar Google Workspace con IA</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('bootcamp-google')">Conocer más</button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="lightbulb" stroke-width="2" class="text-orange-400"></i>
+                                <h3 class="card-title">Bootcamp prototipado de productos digitales con IA</h3>
+                            </div>
+                            <p class="card-description mb-4">Aceleras tu ciclo de innovación: de concepto a prototipo validado en semanas usando IA como co-piloto creativo.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">21 días, 1h/día</div>
+                                <div class="service-target">Innovadores y product managers</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                                <span class="text-orange-400 text-sm font-medium">Para ti si quieres validar ideas rápidamente con prototipos</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('bootcamp-prototipado')">Conocer más</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="punchline">6 bootcamps especializados que activan competencias críticas con metodología concentrada y práctica inmediata.</div>
+                </div>
+            </section>
+
+            <!-- Slide 4: Implantación y Acompañamiento -->
+            <section class="slide" id="slide-4">
+                <div class="slide-content">
+                    <h1 class="slide-title">Implantación y <span class="text-highlight">Acompañamiento</span></h1>
+                    <p class="slide-subtitle">Cambios reales en organizaciones con acompañamiento experto personalizado</p>
+                    
+                    <div class="category-header">Implantación y acompañamiento</div>
+                    
+                    <div class="feature-grid">
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="trending-up" stroke-width="2" class="text-yellow-400"></i>
+                                <h3 class="card-title">Ciclos de (R)evolución</h3>
+                            </div>
+                            <p class="card-description mb-4">Generas transformaciones que se ven, se miden y se sostienen en el tiempo sin depender de consultores externos.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">4 a 12 semanas</div>
+                                <div class="service-target">Equipos y organizaciones</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                <span class="text-yellow-400 text-sm font-medium">Para ti si quieres cambios organizacionales que perduren</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('sprints-evolucion')">Conocer más</button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="user-check" stroke-width="2" class="text-yellow-400"></i>
+                                <h3 class="card-title">Coaching de empoderamiento</h3>
+                            </div>
+                            <p class="card-description mb-4">Rediseñas tu liderazgo desde la raíz: cómo piensas, decides y actúas bajo presión con acompañamiento experto.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">4 a 12 semanas</div>
+                                <div class="service-target">Tomadores de decisiones</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+                                <span class="text-cyan-400 text-sm font-medium">Para ti si quieres tomar decisiones con confianza y criterio</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('coaching-empoderamiento')">Conocer más</button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="wrench" stroke-width="2" class="text-yellow-400"></i>
+                                <h3 class="card-title">Coaching técnico</h3>
+                            </div>
+                            <p class="card-description mb-4">Resuelves bloqueos técnicos que llevas postergando y optimizas tu stack para escalar sin fricción.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">Sesiones personalizadas</div>
+                                <div class="service-target">Equipos técnicos y desarrolladores</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                                <span class="text-green-400 text-sm font-medium">Para ti si necesitas resolver bloqueos técnicos complejos</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('coaching-tecnico')">Conocer más</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="glass-card mt-8">
+                        <h3 class="card-title mb-4">🎯 ¿Es para ti si...?</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-start gap-3">
+                                <i data-lucide="check-circle" stroke-width="2" class="text-green-400 mt-1 flex-shrink-0"></i>
+                                <span class="text-secondary">Buscas (r)evolucionar con foco, sin sobrecargar a tu equipo</span>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <i data-lucide="check-circle" stroke-width="2" class="text-green-400 mt-1 flex-shrink-0"></i>
+                                <span class="text-secondary">Eres tomador de decisiones o innovador clave</span>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <i data-lucide="check-circle" stroke-width="2" class="text-green-400 mt-1 flex-shrink-0"></i>
+                                <span class="text-secondary">Necesitas resultados tangibles en tiempo definido</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="punchline">Transformación organizacional con metodología probada y acompañamiento humano experto.</div>
+                </div>
+            </section>
+
+            <!-- Slide 5: Soluciones con IA Aplicada -->
+            <section class="slide" id="slide-5">
+                <div class="slide-content">
+                    <h1 class="slide-title">Soluciones con <span class="text-highlight">IA</span> Aplicada</h1>
+                    <p class="slide-subtitle">Asistentes y agentes inteligentes que operan por ti con resultados inmediatos</p>
+                    
+                    <div class="category-header">Soluciones con IA aplicada</div>
+                    
+                    <div class="feature-grid">
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="bot" stroke-width="2" class="text-cyan-400"></i>
+                                <h3 class="card-title">Asistentes y agentes inteligentes</h3>
+                            </div>
+                            <p class="card-description mb-4">Operas con IA que actúa por ti: asistentes personalizados y agentes que ejecutan.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">~3 semanas/ciclo</div>
+                                <div class="service-target">Operaciones repetitivas</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+                                <span class="text-cyan-400 text-sm font-medium">Para ti si necesitas liberar tiempo o sistematizar operaciones</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('asistentes-ia')">Conocer más</button>
+                            </div>
+                        </div>
+
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="code" stroke-width="2" class="text-purple-400"></i>
+                                <h3 class="card-title">Desarrollo de software a la medida</h3>
+                            </div>
+                            <p class="card-description mb-4">Creamos software personalizado usando IA en todo el proceso de desarrollo e integrando componentes inteligentes en tu producto final.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">2-6 meses según alcance</div>
+                                <div class="service-target">Empresas y startups</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                                <span class="text-purple-400 text-sm font-medium">Necesitas software personalizado que integre IA nativa y se desarrolle con velocidad exponencial</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('desarrollo-software-ia')">Conocer más</button>
+                            </div>
+                        </div>
+
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="refresh-cw" stroke-width="2" class="text-yellow-400"></i>
+                                <h3 class="card-title">Evolución de sistemas existentes</h3>
+                            </div>
+                            <p class="card-description mb-4">Optimizas tus sistemas previos de IA para que entreguen más valor con menos esfuerzo.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">Según evaluación</div>
+                                <div class="service-target">Sistemas IA existentes</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                <span class="text-yellow-400 text-sm font-medium">Para ti si ya implementaste IA pero sientes que no da su potencial</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('evolucion-sistemas')">Conocer más</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="glass-card mt-8">
+                        <h3 class="card-title mb-4">🔬 Proceso de Implementación</h3>
+                        <div class="service-timeline">
+                            <div class="timeline-item">
+                                <h4 class="text-yellow-400 font-semibold mb-2">1. Evaluación Técnica</h4>
+                                <p class="text-secondary text-sm">Análisis de procesos actuales y identificación de oportunidades de automatización</p>
+                            </div>
+                            <div class="timeline-item">
+                                <h4 class="text-yellow-400 font-semibold mb-2">2. Diseño de Solución</h4>
+                                <p class="text-secondary text-sm">Arquitectura de asistentes/agentes específicos para tus necesidades</p>
+                            </div>
+                            <div class="timeline-item">
+                                <h4 class="text-yellow-400 font-semibold mb-2">3. Implementación Iterativa</h4>
+                                <p class="text-secondary text-sm">Desarrollo en ciclos cortos con validación continua de resultados</p>
+                            </div>
+                            <div class="timeline-item">
+                                <h4 class="text-yellow-400 font-semibold mb-2">4. Optimización Continua</h4>
+                                <p class="text-secondary text-sm">Monitoreo y mejora constante basada en datos de uso real</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="punchline">IA que trabaja por ti: automatización inteligente con resultados medibles desde la primera semana.</div>
+                </div>
+            </section>
+
+            <!-- Slide 6: Workshops y Charlas -->
+            <section class="slide" id="slide-6">
+                <div class="slide-content">
+                    <h1 class="slide-title">Programas, Workshops y <span class="text-highlight">Charlas a la Medida</span></h1>
+                    <p class="slide-subtitle">Experiencias en vivo que activan transformación cultural e inspiración práctica</p>
+                    
+                    <div class="category-header">Programas, workshops y charlas a la medida</div>
+                    
+                    <div class="feature-grid">
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="users" stroke-width="2" class="text-yellow-400"></i>
+                                <h3 class="card-title">Talleres especializados</h3>
+                            </div>
+                            <p class="card-description mb-4">Te sumerges en formación práctica con impacto inmediato y guía experta.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">3 horas a 1 semana</div>
+                                <div class="service-target">Equipos y comunidades</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                                <span class="text-blue-400 text-sm font-medium">Para ti si necesitas entrenar a tu equipo en temas clave</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('talleres-especializados')">Conocer más</button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="mic" stroke-width="2" class="text-yellow-400"></i>
+                                <h3 class="card-title">Charlas inspiradoras</h3>
+                            </div>
+                            <p class="card-description mb-4">Conectas con ideas disruptivas que abren conversación y despiertan propósito.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">Desde 30 minutos</div>
+                                <div class="service-target">Audiencias masivas</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                                <span class="text-purple-400 text-sm font-medium">Para ti si buscas motivar y activar transformación cultural</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('charlas-inspiradoras')">Conocer más</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="glass-card mt-8">
+                        <h3 class="card-title mb-4">📋 Modalidades de Entrega</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="text-center p-4 bg-surface-glass rounded-lg">
+                                <i data-lucide="monitor" stroke-width="2" class="text-yellow-400 w-8 h-8 mx-auto mb-2"></i>
+                                <h4 class="text-yellow-400 font-semibold mb-1">Virtual</h4>
+                                <p class="text-secondary text-sm">Plataformas interactivas</p>
+                            </div>
+                            <div class="text-center p-4 bg-surface-glass rounded-lg">
+                                <i data-lucide="building" stroke-width="2" class="text-yellow-400 w-8 h-8 mx-auto mb-2"></i>
+                                <h4 class="text-yellow-400 font-semibold mb-1">Presencial</h4>
+                                <p class="text-secondary text-sm">En tus instalaciones</p>
+                            </div>
+                            <div class="text-center p-4 bg-surface-glass rounded-lg">
+                                <i data-lucide="globe" stroke-width="2" class="text-yellow-400 w-8 h-8 mx-auto mb-2"></i>
+                                <h4 class="text-yellow-400 font-semibold mb-1">Híbrido</h4>
+                                <p class="text-secondary text-sm">Combinación optimizada</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="punchline">Experiencias memorables que generan conversaciones y activan propósito colectivo.</div>
+                </div>
+            </section>
+
+            <!-- Slide 7: Consultoría Estratégica -->
+            <section class="slide" id="slide-7">
+                <div class="slide-content">
+                    <h1 class="slide-title">Consultoría <span class="text-highlight">Estratégica</span></h1>
+                    <p class="slide-subtitle">Claridad inmediata para tomar decisiones estratégicas con confianza y método</p>
+                    
+                    <div class="category-header">Consultoría estratégica</div>
+                    
+                    <div class="feature-grid">
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="search" stroke-width="2" class="text-yellow-400"></i>
+                                <h3 class="card-title">Revisión de Formas de Trabajo</h3>
+                            </div>
+                            <p class="card-description mb-4">Descubres cuellos de botella y oportunidades invisibles para mejorar rendimiento.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">2 a 4 semanas</div>
+                                <div class="service-target">Organizaciones complejas</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                                <span class="text-green-400 text-sm font-medium">🔍 Para ti si sospechas que puedes operar mejor, pero no sabes por dónde empezar</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('diagnostico-cognitivo')">Conocer más</button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="target" stroke-width="2" class="text-cyan-400"></i>
+                                <h3 class="card-title">EstrategIA en Acción</h3>
+                            </div>
+                            <p class="card-description mb-4">Planificas con IA y marcos de MetodologIA para alinear visión, foco y ejecución.</p>
+                            <div class="service-meta">
+                                <div class="service-duration">3 sesiones</div>
+                                <div class="service-target">Líderes estratégicos</div>
+                            </div>
+                            <div class="mt-4 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+                                <span class="text-cyan-400 text-sm font-medium">Para ti si quieres una planeación realista, creativa y lista para aplicar</span>
+                            </div>
+                            <div style="text-align: center; margin-top: var(--space-lg);">
+                                <button class="btn btn-primary" onclick="openServiceModal('estrategia-ia')">Conocer más</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="glass-card mt-8">
+                        <h3 class="card-title mb-4">🔎 Señales de que podríamos trabajar juntos</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-start gap-3">
+                                <i data-lucide="alert-triangle" stroke-width="2" class="text-yellow-400 mt-1 flex-shrink-0"></i>
+                                <span class="text-secondary">¿Sientes que estás haciendo mucho, pero avanzas poco?</span>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <i data-lucide="crosshair" stroke-width="2" class="text-yellow-400 mt-1 flex-shrink-0"></i>
+                                <span class="text-secondary">¿Te cuesta mantener el foco o transmitir una visión clara?</span>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <i data-lucide="cpu" stroke-width="2" class="text-cyan-400 mt-1 flex-shrink-0"></i>
+                                <span class="text-secondary">¿Has probado IA pero no ves resultados reales?</span>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <i data-lucide="users-2" stroke-width="2" class="text-yellow-400 mt-1 flex-shrink-0"></i>
+                                <span class="text-secondary">¿Tienes un equipo con potencial, pero sin estructura común?</span>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <i data-lucide="trending-up" stroke-width="2" class="text-green-400 mt-1 flex-shrink-0"></i>
+                                <span class="text-secondary">¿Buscas escalar sin perder sentido?</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="punchline">Claridad estratégica inmediata con metodología probada y tecnología aplicada.</div>
+                </div>
+            </section>
+
+            <!-- Slide 8: Próximos Pasos y Contacto -->
+            <section class="slide" id="slide-8">
+                <div class="slide-content">
+                    <h1 class="slide-title">Tu Siguiente <span class="text-highlight">Paso</span></h1>
+                    <p class="slide-subtitle">Inicia con preventa consultiva gratuita y diseña tu ruta de (r)evolución personalizada</p>
+                    
+                    <div class="glass-card mb-8">
+                        <h3 class="card-title mb-4">🌱 Observaciones Finales</h3>
+                        <div class="space-y-4">
+                            <div class="flex items-start gap-3">
+                                <i data-lucide="gift" stroke-width="2" class="text-green-400 mt-1 flex-shrink-0"></i>
+                                <span class="text-secondary">Todos los servicios comienzan con una etapa de <strong>preventa consultiva gratuita</strong>, activada por asistentes IA y, si es necesario, con facilitadores humanos.</span>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <i data-lucide="package" stroke-width="2" class="text-blue-400 mt-1 flex-shrink-0"></i>
+                                <span class="text-secondary">Se entregan experiencias completas: contenido, facilitación, herramientas y acompañamiento.</span>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <i data-lucide="bot" stroke-width="2" class="text-cyan-400 mt-1 flex-shrink-0"></i>
+                                <span class="text-secondary">Las soluciones de IA incluyen <strong>asistentes conversacionales</strong> y <strong>agentes autónomos</strong>.</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-grid">
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="calendar" stroke-width="2" class="text-yellow-400"></i>
+                                <h3 class="card-title">Agenda tu consulta</h3>
+                            </div>
+                            <p class="card-description mb-4">Conversación de 30 minutos para identificar tu punto de partida y diseñar tu ruta personalizada.</p>
+                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB" target="_blank" rel="noopener noreferrer" class="btn btn-primary w-full">
+                                <i data-lucide="external-link" stroke-width="2"></i>
+                                Agendar Consulta Gratuita
+                            </a>
+                        </div>
+                        
+                        <div class="glass-card">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i data-lucide="globe" stroke-width="2" class="text-cyan-400"></i>
+                                <h3 class="card-title">Explora el ecosistema</h3>
+                            </div>
+                            <p class="card-description mb-4">Descubre todas las experiencias, recursos y comunidad en nuestro sitio web.</p>
+                            <a href="https://metodologia.info" target="_blank" rel="noopener noreferrer" class="btn btn-secondary w-full">
+                                <i data-lucide="compass" stroke-width="2"></i>
+                                Visitar MetodologIA.info
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <div class="punchline text-2xl">De la intención a la acción: tu (r)evolución empieza con una conversación.</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Navigation Controls -->
+        <button class="nav-control prev" onclick="previousSlide()">
+            <i data-lucide="chevron-left" stroke-width="2.5"></i>
+        </button>
+        <button class="nav-control next" onclick="nextSlide()">
+            <i data-lucide="chevron-right" stroke-width="2.5"></i>
+        </button>
+    </div>
+
+    <!-- Service Modals -->
+    <div class="service-modal-overlay" id="serviceModal">
+        <div class="service-modal-content">
+            <button class="modal-close-btn" onclick="closeServiceModal()">
+                <i data-lucide="x" stroke-width="2"></i>
+            </button>
+            <div id="modalContent">
+                <!-- Dynamic content will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Carousel Navigation System
+        let currentSlide = 0;
+        const totalSlides = 9;
+        const carouselTrack = document.getElementById('carouselTrack');
+        const header = document.getElementById('header');
+
+        // Initialize Lucide Icons
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+            
+            // Header scroll effect
+            window.addEventListener('scroll', function() {
+                if (window.scrollY > 50) {
+                    header.classList.add('scrolled');
+                } else {
+                    header.classList.remove('scrolled');
+                }
+            });
+
+            // Initialize accessibility features
+            setupAccessibility();
+        });
+
+        function updateCarousel() {
+            const translateX = -(currentSlide * (100 / totalSlides));
+            carouselTrack.style.transform = `translateX(${translateX}%)`;
+            
+            // Update navigation arrows visibility
+            updateNavigationArrows();
+            
+            // Announce slide change for screen readers
+            announceSlideChange(currentSlide);
+        }
+
+        function updateNavigationArrows() {
+            const prevButton = document.querySelector('.nav-control.prev');
+            const nextButton = document.querySelector('.nav-control.next');
+            
+            // Hide left arrow on first slide
+            if (currentSlide === 0) {
+                prevButton.style.display = 'none';
+            } else {
+                prevButton.style.display = 'flex';
+            }
+            
+            // Hide right arrow on last slide
+            if (currentSlide === totalSlides - 1) {
+                nextButton.style.display = 'none';
+            } else {
+                nextButton.style.display = 'flex';
+            }
+        }
+
+        function goToSlide(slideIndex) {
+            if (slideIndex >= 0 && slideIndex < totalSlides) {
+                currentSlide = slideIndex;
+                updateCarousel();
+                
+                // Animate slide content
+                const slideContent = document.querySelector(`#slide-${slideIndex} .slide-content`);
+                if (slideContent) {
+                    slideContent.style.animation = 'none';
+                    slideContent.offsetHeight; // Trigger reflow
+                    slideContent.style.animation = 'fadeInUp 0.6s ease-out';
+                }
+            }
+        }
+
+        function nextSlide() {
+            if (currentSlide < totalSlides - 1) {
+                goToSlide(currentSlide + 1);
+            }
+        }
+
+        function previousSlide() {
+            if (currentSlide > 0) {
+                goToSlide(currentSlide - 1);
+            }
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            switch(e.key) {
+                case 'ArrowLeft':
+                case 'ArrowUp':
+                    previousSlide();
+                    break;
+                case 'ArrowRight':
+                case 'ArrowDown':
+                    nextSlide();
+                    break;
+                case 'Home':
+                    goToSlide(0);
+                    break;
+                case 'End':
+                    goToSlide(totalSlides - 1);
+                    break;
+            }
+        });
+
+        // Touch/Swipe Support
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        carouselTrack.addEventListener('touchstart', function(e) {
+            touchStartX = e.changedTouches[0].screenX;
+        });
+
+        carouselTrack.addEventListener('touchend', function(e) {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        });
+
+        function handleSwipe() {
+            const swipeThreshold = 50;
+            const swipeDistance = touchEndX - touchStartX;
+            
+            if (Math.abs(swipeDistance) > swipeThreshold) {
+                if (swipeDistance > 0) {
+                    previousSlide();
+                } else {
+                    nextSlide();
+                }
+            }
+        }
+
+        // Notification System
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <i data-lucide="${type === 'error' ? 'alert-circle' : 'check-circle'}" stroke-width="2"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            
+            notification.style.cssText = `
+                position: fixed;
+                top: 90px;
+                right: 20px;
+                background: var(--surface-glass);
+                border: 1px solid var(--border-bright);
+                border-radius: 12px;
+                padding: var(--space-md) var(--space-lg);
+                z-index: 3000;
+                backdrop-filter: blur(20px);
+                transform: translateX(100%);
+                transition: all var(--transition-normal);
+                box-shadow: var(--shadow-xl);
+                color: var(--text-primary);
+                max-width: 350px;
+            `;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.transform = 'translateX(0)';
+            }, 10);
+            
+            setTimeout(() => {
+                notification.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 300);
+            }, 3000);
+            
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
+        // Accessibility Setup
+        function setupAccessibility() {
+            // Add live region for announcements
+            const liveRegion = document.createElement('div');
+            liveRegion.setAttribute('aria-live', 'polite');
+            liveRegion.setAttribute('aria-atomic', 'true');
+            liveRegion.className = 'sr-only';
+            liveRegion.id = 'slide-announcer';
+            document.body.appendChild(liveRegion);
+        }
+
+        function announceSlideChange(slideIndex) {
+            const announcer = document.getElementById('slide-announcer');
+            const slideNames = [
+                'Introducción al Portafolio',
+                'Programa de Empoderamiento',
+                'Programas Especializados',
+                'Bootcamps Intensivos',
+                'Implantación y Acompañamiento',
+                'Soluciones con IA Aplicada',
+                'Programas, Workshops y Charlas',
+                'Consultoría Estratégica',
+                'Próximos Pasos y Contacto'
+            ];
+            
+            if (announcer && slideNames[slideIndex]) {
+                announcer.textContent = `Slide ${slideIndex + 1} de ${totalSlides}: ${slideNames[slideIndex]}`;
+            }
+        }
+
+        // Presenter Mode
+        function togglePresenterMode() {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                document.documentElement.requestFullscreen();
+            }
+        }
+
+        // Performance optimization
+        const observerOptions = {
+            root: null,
+            rootMargin: '0px',
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        // Observe all service cards
+        document.querySelectorAll('.service-card, .glass-card').forEach(card => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'all 0.6s ease-out';
+            observer.observe(card);
+        });
+
+        // Service Modal System
+        const serviceModalData = {
+            'empoderamiento': {
+                title: 'Programa de Empoderamiento',
+                subtitle: 'De automatismo a presencia: rediseña cómo trabajas, piensas y decides para resultados exponenciales',
+                sections: [
+                    {
+                        title: '🎯 ¿Qué Transformación Logras?',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Del Automatismo a la Presencia',
+                                content: 'Aplicas el Playbook 1.0 para pasar de reaccionar automáticamente a responder con intención y claridad estratégica. Eliminas la dispersión mental y tomas control de tu enfoque y energía para construir una forma de trabajar que esté a la altura de tus metas.'
+                            },
+                            {
+                                title: 'De Trabajar Duro a Trabajar sin Fricción',
+                                content: 'Implementas el Playbook 2.0 para eliminar micro-interrupciones y optimizar tu concentración profunda. Rediseñas tu flujo de trabajo eliminando obstáculos invisibles que consumen tu energía, liberando tiempo para trabajo de alto valor.'
+                            },
+                            {
+                                title: 'De Días Caóticos a Jornadas Inteligentes',
+                                content: 'Construyes una estructura de trabajo tan robusta que transformas la incertidumbre en oportunidad. Aplicas el Playbook 3.0 para crear sistemas que manejan imprevistos y mantienen tu productividad en cualquier circunstancia.'
+                            },
+                            {
+                                title: 'De Efectivo a Alto Rendimiento',
+                                content: 'Rediseñas el criterio de excelencia creando tu propio juego de estándares superiores. Sigues el Playbook 4.0 para desarrollar un ethos personal que te distingue y genera resultados exponenciales.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '🧠 Playbook 1.0: Del Automatismo a la Presencia',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Estación 1: Observar el Tiempo',
+                                content: 'Tomas conciencia de dónde se invierten realmente tu tiempo y energía. Tu calendario revela tus prioridades reales, no las declaradas. Aplicas rutinas de observación de 5 minutos al final del día para identificar patrones de automatismo vs. presencia.'
+                            },
+                            {
+                                title: 'Estación 2: Escuchar la Percepción Externa',
+                                content: 'Descubres tus puntos ciegos y tu potencial no aprovechado. El feedback bien pedido te revela lo que es difícil ver desde adentro. Implementas rutinas semanales de apertura para construir el hábito de escuchar y mejorar.'
+                            },
+                            {
+                                title: 'Estación 3: Declarar la Intención',
+                                content: 'Transformas reflexiones en compromisos. Lo que no se nombra no se prioriza, y lo que no se declara no se transforma. Desarrollas declaraciones poderosas que marcan un antes y un después en tu forma de trabajar.'
+                            },
+                            {
+                                title: 'La Ecuación del Valor Real',
+                                content: 'Cambias de "Tiempo = Dinero" a "Tiempo x Palancas = + Impacto → (+) Dinero". El valor real proviene del impacto que generas, no de las horas que trabajas. Las palancas son sistemas, metodologías y herramientas (como la IA) que multiplican tu impacto.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '⚡ Metodología Integrada de los 6 Playbooks',
+                        type: 'list',
+                        items: [
+                            '🧠 Playbook 1.0: Auditoría de tiempo e intención con prompts especializados',
+                            '⚡ Playbook 2.0: Diagnóstico de fricción invisible y rediseño de procesos',
+                            '🎯 Playbook 3.0: Diseño de sistemas robustos para manejar imprevistos',
+                            '🚀 Playbook 4.0: Desarrollo de ethos personal y artesanía virtuosa',
+                            '📈 Playbook 5.0: Transición de ocupado a productivo con intención',
+                            '✨ Playbook 6.0: Transformación de entregables a experiencias memorables'
+                        ]
+                    },
+                    {
+                        title: '💡 Beneficios Metodológicos Específicos',
+                        type: 'list',
+                        items: [
+                            '🔍 Framework de "Fricción Invisible" para identificar bloqueos ocultos',
+                            '⚙️ Sistema de "Intención sobre Intensidad" para decisiones estratégicas',
+                            '🎨 Desarrollo de "Craftsmanship" técnico y profesional',
+                            '📊 Métricas de impacto real vs. actividad superficial',
+                            '🤖 Integración de IA como palanca de multiplicación de valor'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: '¿Listo para tu (R)evolución Profesional?',
+                    subtitle: 'Agenda tu sesión estratégica gratuita y diseña tu ruta de transformación personalizada',
+                    buttons: [
+                        {
+                            text: '🚀 Agendar Consulta Gratuita',
+                            url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB',
+                            type: 'primary'
+                        },
+                        {
+                            text: 'Solicitar + información',
+                            url: 'mailto:contacto@metodologia.info?subject=Solicitar más información del Programa de Empoderamiento',
+                            type: 'secondary'
+                        }
+                    ]
+                }
+            },
+            'creacion-digital': {
+                title: 'Programa de Creación y Transformación Digital con IA',
+                subtitle: 'Transformas ideas en productos digitales que redefinen mercados usando IA como co-piloto estratégico',
+                sections: [
+                    {
+                        title: '🚀 Stack Tecnológico Avanzado',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'IA Generativa Aplicada',
+                                content: 'Dominas GPT-4, Claude, y modelos especializados para automatizar desarrollo y optimizar código.'
+                            },
+                            {
+                                title: 'Arquitectura de Productos',
+                                content: 'Diseñas soluciones escalables con microservicios, APIs inteligentes y experiencias neurodigitales.'
+                            },
+                            {
+                                title: 'Metodología Ágil + IA',
+                                content: 'Implementas frameworks que combinan agilidad tradicional con capacidades de inteligencia artificial.'
+                            },
+                            {
+                                title: 'Visión Estratégica',
+                                content: 'Conectas código con impacto empresarial, creando productos que resuelven problemas reales.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '⚡ Playbook 2.0: De Trabajo Duro a Sin Fricción',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Módulo 1: Diagnosticar la Fricción',
+                                content: 'Identificas los puntos exactos donde se pierde el foco y la energía en tu desarrollo. Aplicas el framework de "Fricción Invisible" para detectar micro-interrupciones que sabotean tu productividad.'
+                            },
+                            {
+                                title: 'Módulo 2: Diseñar Soluciones Anti-Fricción',
+                                content: 'Creas sistemas específicos para eliminar obstáculos. Implementas principios de "Calidad sobre Cantidad" y "Planificación Estratégica" para rediseñar tu flujo de trabajo.'
+                            },
+                            {
+                                title: 'Módulo 3: Ritualizar el Cambio',
+                                content: 'Conviertes las soluciones en hábitos automáticos. Desarrollas rituales de enfoque matutino y cierre diario que anclan tu nuevo sistema de trabajo sin fricción.'
+                            },
+                            {
+                                title: 'Caja de Herramientas de Diseño',
+                                content: 'Dominas organización del espacio, gestión del enfoque con bloques de concentración, y estructura de metas con micro-pasos completables que eliminan la resistencia mental.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '💡 Proyectos Reales que Desarrollas',
+                        type: 'list',
+                        items: [
+                            '🤖 Asistente IA personalizado para tu industria específica',
+                            '📱 Aplicación con interfaz conversacional inteligente',
+                            '⚙️ Sistema de automatización de procesos empresariales',
+                            '🎯 Dashboard inteligente con analytics predictivos',
+                            '🔗 API que integra múltiples modelos de IA'
+                        ]
+                    },
+                    {
+                        title: '🎯 Metodología de Desarrollo Sin Fricción',
+                        type: 'list',
+                        items: [
+                            '🔍 Diagnóstico de fricción invisible en tu proceso de desarrollo',
+                            '⚙️ Rediseño de flujos de trabajo con principios anti-fricción',
+                            '🎨 Implementación de bloques de enfoque para desarrollo profundo',
+                            '🔄 Ritualización de hábitos de programación de alto rendimiento',
+                            '📊 Medición de impacto real vs. actividad superficial',
+                            '🤖 Integración de IA como palanca de multiplicación de productividad'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Construye el Futuro Digital',
+                    subtitle: 'Únete a la élite de creadores que están redefiniendo lo posible con tecnología',
+                    buttons: [
+                        {
+                            text: '⚡ Evaluar mi Perfil',
+                            url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB',
+                            type: 'primary'
+                        },
+                        {
+                            text: 'Solicitar + información',
+                            url: 'mailto:contacto@metodologia.info?subject=Solicitar más información del Programa de Creación y Transformación Digital con IA',
+                            type: 'secondary'
+                        }
+                    ]
+                }
+            },
+            'gerencia': {
+                title: 'Programa GerencIA',
+                subtitle: 'Lidera con criterio estratégico, adaptabilidad e inteligencia artificial integrada',
+                sections: [
+                    {
+                        title: '👥 Liderazgo Potenciado con IA',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Decisiones Basadas en Datos',
+                                content: 'Usas IA para analizar patrones, predecir resultados y tomar decisiones más informadas y rápidas.'
+                            },
+                            {
+                                title: 'Gestión de Equipos Inteligente',
+                                content: 'Implementas herramientas IA para optimizar comunicación, productividad y desarrollo del talento.'
+                            },
+                            {
+                                title: 'Estrategia Adaptativa',
+                                content: 'Desarrollas capacidad para pivotear estrategias basándote en insights en tiempo real.'
+                            },
+                            {
+                                title: 'Cultura de Innovación',
+                                content: 'Lideras transformación cultural integrando IA de forma humana y sostenible.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '🎯 Playbook 3.0: De Días Caóticos a Jornadas Inteligentes',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Módulo 1: Diagnosticar el Caos',
+                                content: 'Identificas las fuentes de caos que drenan tu tiempo y energía. Aplicas el framework de "Desorden, Imprevistos y Fricción" para detectar ineficiencias en tu gestión.'
+                            },
+                            {
+                                title: 'Módulo 2: Diseñar la Arquitectura',
+                                content: 'Construyes un entorno y procesos que trabajan para ti. Implementas principios de Orden, Flujo, Intención y Dirección para crear sistemas a prueba de caos.'
+                            },
+                            {
+                                title: 'Módulo 3: Ritualizar la Estrategia',
+                                content: 'Conviertes tus sistemas diseñados en comportamientos automáticos. Desarrollas rituales de cierre diario y revisión semanal que anclan tu liderazgo estratégico.'
+                            },
+                            {
+                                title: 'Caja de Herramientas de Liderazgo',
+                                content: 'Dominas el método 5S para orden, principios Lean para flujo, OKRs simplificados para dirección, y rituales de anticipación para ganar la batalla del día.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '📈 Resultados que Alcanzas',
+                        type: 'list',
+                        items: [
+                            '⚡ 30% mejora en velocidad de toma de decisiones estratégicas',
+                            '🎯 Framework personal para gestión de crisis y cambios',
+                            '📊 Dashboard ejecutivo con métricas predictivas automatizadas',
+                            '🤝 Metodología para liderar equipos híbridos (humanos + IA)',
+                            '🚀 Plan de transformación digital para tu organización'
+                        ]
+                    },
+                    {
+                        title: '💡 Metodología de Liderazgo Inteligente',
+                        type: 'list',
+                        items: [
+                            '🔍 Diagnóstico de fuentes de caos en tu gestión diaria',
+                            '⚙️ Diseño de sistemas anti-caos con principios Lean y 5S',
+                            '🎨 Implementación de rituales de anticipación y planificación',
+                            '🔄 Establecimiento de OKRs como filtro de prioridades',
+                            '📊 Creación de activos de conocimiento (SOPs, plantillas, prompts)',
+                            '🤖 Integración de IA como palanca de multiplicación de liderazgo'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Evoluciona tu Liderazgo',
+                    subtitle: 'Para líderes que gestionan equipos y proyectos complejos',
+                    buttons: [
+                        {
+                            text: '🎯 Diagnóstico de Liderazgo',
+                            url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB',
+                            type: 'primary'
+                        },
+                        {
+                            text: 'Solicitar + información',
+                            url: 'mailto:contacto@metodologia.info?subject=Solicitar más información del Programa GerencIA',
+                            type: 'secondary'
+                        }
+                    ]
+                }
+            },
+            'bootcamp-prompting': {
+                title: 'Bootcamp Prompting Engineering',
+                subtitle: 'Crea sistemas conversacionales efectivos y automatiza procesos complejos en 21 días',
+                sections: [
+                    {
+                        title: '⚙️ Técnicas Avanzadas de Prompting',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Prompt Chains Complejos',
+                                content: 'Diseñas secuencias de prompts que resuelven problemas multi-paso con precisión profesional.'
+                            },
+                            {
+                                title: 'Fine-tuning de Respuestas',
+                                content: 'Optimizas modelos para tu contexto específico, mejorando relevancia y eficiencia.'
+                            },
+                            {
+                                title: 'Automatización de Flujos',
+                                content: 'Implementas sistemas que operan de forma autónoma con mínima supervisión humana.'
+                            },
+                            {
+                                title: 'Testing y Validación',
+                                content: 'Aplicas metodologías para garantizar calidad y consistencia en outputs de IA.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '🛠️ Herramientas que Dominas',
+                        type: 'list',
+                        items: [
+                            '🤖 GPT-4, Claude, y modelos especializados para casos específicos',
+                            '⚙️ APIs y integraciones para automatización empresarial',
+                            '📊 Frameworks de evaluación y mejora continua',
+                            '🔗 Sistemas de prompt chaining y workflow automation',
+                            '💡 Templates reutilizables para casos de uso recurrentes'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Domina el Arte del Prompting',
+                    subtitle: '21 días intensivos para usuarios avanzados de IA',
+                    buttons: [
+                        {
+                            text: '🚀 Iniciar Bootcamp',
+                            url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB',
+                            type: 'primary'
+                        },
+                        {
+                            text: 'Solicitar + información',
+                            url: 'mailto:contacto@metodologia.info?subject=Solicitar más información del Bootcamp Prompting Engineering',
+                            type: 'secondary'
+                        }
+                    ]
+                }
+            },
+            'bootcamp-liderazgo': {
+                title: 'Bootcamp Liderazgo Regenerativo',
+                subtitle: 'Lideras con claridad interna, escucha activa y enfoque humano para equipos de alto rendimiento.',
+                sections: [
+                    {
+                        title: '🌱 Metodología Integrada de Liderazgo',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Playbook 1.0: Del Automatismo a la Presencia',
+                                content: 'Desarrollas autoconciencia profunda aplicando auditorías de intención para identificar patrones reactivos en tu liderazgo.'
+                            },
+                            {
+                                title: 'Playbook 2.0: De Trabajar Duro a Trabajar sin Fricción',
+                                content: 'Eliminas fricción invisible en la comunicación y procesos de equipo, optimizando la concentración colectiva.'
+                            },
+                            {
+                                title: 'Playbook 4.0: De Efectivo a Alto Rendimiento',
+                                content: 'Desarrollas tu ethos personal como líder, creando un credo que guía decisiones bajo presión.'
+                            },
+                            {
+                                title: 'Playbook 6.0: De Cumplir a Entregar Excelencia',
+                                content: 'Transformas tus entregables de liderazgo en experiencias memorables que construyen autoridad y confianza.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '⚡ Herramientas de Liderazgo con IA',
+                        type: 'list',
+                        items: [
+                            '🤖 Asistentes IA para análisis de dinámicas de equipo y feedback',
+                            '📊 Dashboards predictivos de engagement y rendimiento del equipo',
+                            '💬 Sistemas de comunicación inteligente que reducen fricción',
+                            '🎯 Herramientas de alineación estratégica con IA conversacional',
+                            '📈 Métricas de impacto del liderazgo en tiempo real'
+                        ]
+                    },
+                    {
+                        title: '✨ Resultados Metodológicos en 21 Días',
+                        type: 'list',
+                        items: [
+                            '🤝 80% mejora en cohesión y motivación del equipo',
+                            '🗣️ 60% reducción en conflictos y malentendidos',
+                            '🎯 3x mayor alineación con objetivos estratégicos',
+                            '🧠 70% reducción en estrés y burnout del liderazgo',
+                            '💡 2x incremento en innovación y proactividad del equipo'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Lidera con Propósito',
+                    subtitle: '21 días para transformar tu manera de liderar.',
+                    buttons: [
+                        { text: 'Solicitar + información', url: 'mailto:contacto@metodologia.info?subject=Solicitar más información del Bootcamp Liderazgo Regenerativo', type: 'secondary' },
+                        { text: '🚀 Agendar Consulta Gratuita', url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB', type: 'primary' }
+                    ]
+                }
+            },
+            'bootcamp-productividad': {
+                title: 'Bootcamp Productividad con IA',
+                subtitle: 'Recuperas foco y energía rediseñando tus rutinas y herramientas digitales con IA estratégica.',
+                sections: [
+                    {
+                        title: '🚀 Metodología Integrada de los Playbooks',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Playbook 1.0: Del Automatismo a la Presencia',
+                                content: 'Aplicas auditorías de tiempo e intención para identificar patrones reactivos y diseñar respuestas conscientes.'
+                            },
+                            {
+                                title: 'Playbook 2.0: De Trabajar Duro a Trabajar sin Fricción',
+                                content: 'Eliminas micro-interrupciones y optimizas tu concentración profunda usando IA como palanca de automatización.'
+                            },
+                            {
+                                title: 'Playbook 3.0: De Días Caóticos a Jornadas Inteligentes',
+                                content: 'Construyes sistemas robustos que transforman la incertidumbre en oportunidad de alto rendimiento.'
+                            },
+                            {
+                                title: 'Playbook 5.0: De Ocupado a Productivo',
+                                content: 'Implementas el principio de "Intención sobre Intensidad" para maximizar impacto con mínimo esfuerzo.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '⚡ Herramientas IA Especializadas',
+                        type: 'list',
+                        items: [
+                            '🤖 Asistentes conversacionales para gestión de tareas y priorización',
+                            '📊 Dashboards inteligentes que predicen y previenen bloqueos',
+                            '⚙️ Automatización de flujos de trabajo con IA generativa',
+                            '🔍 Sistemas de análisis de fricción invisible en tiempo real',
+                            '📈 Métricas de impacto real vs. actividad superficial'
+                        ]
+                    },
+                    {
+                        title: '💡 Resultados Metodológicos en 21 Días',
+                        type: 'list',
+                        items: [
+                            '⏰ 10+ horas semanales recuperadas eliminando fricción invisible',
+                            '🧘 Reducción del 70% en fatiga mental y estrés cognitivo',
+                            '🎯 3x mejora en avance de proyectos de alto impacto',
+                            '💡 Claridad estratégica para decisiones complejas',
+                            '🚀 Implementación de 5+ automatizaciones IA personalizadas'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Multiplica tu Impacto',
+                    subtitle: '21 días para rediseñar tu productividad.',
+                    buttons: [
+                        { text: 'Solicitar + información', url: 'mailto:contacto@metodologia.info?subject=Solicitar más información del Bootcamp Productividad con IA', type: 'secondary' },
+                        { text: '🚀 Agendar Consulta Gratuita', url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB', type: 'primary' }
+                    ]
+                }
+            },
+            'bootcamp-agil': {
+                title: 'Bootcamp Mentalidad Ágil',
+                subtitle: 'Implementas marcos ágiles adaptados a contextos complejos y dinámicos con metodología probada.',
+                sections: [
+                    {
+                        title: '🤸‍♀️ Adopta la Agilidad Real',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Principios Ágiles',
+                                content: 'Interiorizas los valores y principios del manifiesto ágil para una aplicación auténtica.'
+                            },
+                            {
+                                title: 'Frameworks Prácticos',
+                                content: 'Aprendes a usar Scrum, Kanban y otros marcos de manera flexible y adaptada a tu equipo.'
+                            },
+                            {
+                                title: 'Facilitación de Equipos',
+                                content: 'Desarrollas habilidades para guiar a tu equipo hacia la auto-organización y la mejora continua.'
+                            },
+                            {
+                                title: 'Métricas que Importan',
+                                content: 'Aprendes a medir el progreso y el éxito más allá de las métricas de vanidad.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '🚀 Impacto en tu Equipo',
+                        type: 'list',
+                        items: [
+                            '✅ Entregas de valor más rápidas y frecuentes',
+                            '🔄 Mayor capacidad de adaptación al cambio',
+                            '🤝 Mejora en la colaboración y comunicación',
+                            '😊 Aumento de la motivación y el ownership del equipo',
+                            '📈 Reducción de desperdicios y retrabajo'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Transforma tu Manera de Trabajar',
+                    subtitle: '21 días para integrar la agilidad en tu ADN.',
+                    buttons: [
+                        { text: 'Solicitar + información', url: 'mailto:contacto@metodologia.info?subject=Solicitar más información del Bootcamp Mentalidad Ágil', type: 'secondary' },
+                        { text: '🚀 Agendar Consulta Gratuita', url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB', type: 'primary' }
+                    ]
+                }
+            },
+            'bootcamp-google': {
+                title: 'Google Workspace + Gemini + NotebookLM',
+                subtitle: 'Dominas el ecosistema completo de Google para trabajo colaborativo e inteligencia artificial aplicada.',
+                sections: [
+                    {
+                        title: '🛠️ Domina el Ecosistema Google',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Google Workspace Avanzado',
+                                content: 'Optimizas el uso de Gmail, Calendar, Drive, Docs, Sheets y Slides para una colaboración fluida.'
+                            },
+                            {
+                                title: 'Gemini como Asistente IA',
+                                content: 'Integras Gemini en tu flujo de trabajo para generar ideas, resumir información y automatizar tareas.'
+                            },
+                            {
+                                title: 'NotebookLM para Gestión del Conocimiento',
+                                content: 'Usas NotebookLM para crear una base de conocimiento personal y de equipo, inteligente y conectada.'
+                            },
+                            {
+                                title: 'Automatización con Apps Script',
+                                content: 'Aprendes a crear pequeñas automatizaciones que conectan las herramientas de Google entre sí.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '📈 Beneficios para tu Equipo',
+                        type: 'list',
+                        items: [
+                            '🚀 Unica fuente de verdad para la información',
+                            '🤝 Colaboración en tiempo real sin fricciones',
+                            '🤖 Automatización de reportes y tareas manuales',
+                            '💡 Rápida generación de borradores y documentos',
+                            '🧠 Base de conocimiento siempre actualizada y accesible'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Potencia tu Ecosistema Digital',
+                    subtitle: '21 días para dominar las herramientas de Google con IA.',
+                    buttons: [
+                        { text: 'Solicitar + información', url: 'mailto:contacto@metodologia.info?subject=Solicitar más información del Bootcamp Google Workspace + Gemini + NotebookLM', type: 'secondary' },
+                        { text: '🚀 Agendar Consulta Gratuita', url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB', type: 'primary' }
+                    ]
+                }
+            },
+            'sprints-evolucion': {
+                title: 'Ciclos de (R)Evolución',
+                subtitle: 'Logras cambios reales en prácticas, decisiones y resultados, guiado por IA.',
+                sections: [
+                    {
+                        title: '🚀 Un Sprint, Una Transformación',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Diagnóstico Rápido',
+                                content: 'En una semana, identificamos el principal cuello de botella y la mayor oportunidad de mejora.'
+                            },
+                            {
+                                title: 'Diseño de Solución',
+                                content: 'Co-creamos una solución práctica y medible, con un plan de implementación claro y realista.'
+                            },
+                            {
+                                title: 'Implementación Acompañada',
+                                content: 'Durante el sprint, te acompañamos para asegurar la adopción y el ajuste de la solución.'
+                            },
+                            {
+                                title: 'Medición de Impacto',
+                                content: 'Finalizamos el sprint con una medición clara del impacto logrado y los siguientes pasos.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '🎯 Resultados Tangibles',
+                        type: 'list',
+                        items: [
+                            '📈 Mejora de un indicador clave de negocio en semanas',
+                            '💡 Solución a un problema estancado por meses',
+                            '💪 Equipo alineado y enfocado en un objetivo común',
+                            '🔄 Implementación de una nueva práctica o herramienta',
+                            '🗺️ Hoja de ruta clara para las siguientes iniciativas'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Transforma tu Organización',
+                    subtitle: 'Ciclos intensivos que generan cambios reales y medibles en semanas, no años.',
+                    buttons: [
+                        { text: 'Solicitar + información', url: 'mailto:contacto@metodologia.info?subject=Solicitar más información de los Ciclos de (R)Evolución', type: 'secondary' },
+                        { text: '🚀 Agendar Consulta Gratuita', url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB', type: 'primary' }
+                    ]
+                }
+            },
+            'coaching-empoderamiento': {
+                title: 'Coaching de Empoderamiento',
+                subtitle: 'Rediseñas cómo lideras, piensas y decides en sesiones personalizadas.',
+                sections: [
+                    {
+                        title: '🧠 Un Espacio para tu Crecimiento',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Claridad Mental',
+                                content: 'Ordenas tus ideas, identificas tus bloqueos y ganas claridad sobre tus próximos pasos.'
+                            },
+                            {
+                                title: 'Toma de Decisiones',
+                                content: 'Desarrollas un framework personal para tomar decisiones más rápidas, seguras y alineadas.'
+                            },
+                            {
+                                title: 'Liderazgo Consciente',
+                                content: 'Potencias tu estilo de liderazgo, mejorando tu comunicación e influencia en los demás.'
+                            },
+                            {
+                                title: 'Gestión de Energía',
+                                content: 'Aprendes a gestionar tu energía para mantener un alto rendimiento de manera sostenible.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '✨ Beneficios del Proceso',
+                        type: 'list',
+                        items: [
+                            '🎯 Mayor confianza en tu toma de decisiones',
+                            '🧘 Reducción del estrés y la ansiedad profesional',
+                            '🚀 Avance en tus objetivos profesionales y personales',
+                            '🤝 Mejora en tus relaciones profesionales y personales',
+                            '💡 Un plan de desarrollo personal claro y accionable'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Invierte en tu Potencial',
+                    subtitle: 'Sesiones personalizadas para líderes y tomadores de decisiones.',
+                    buttons: [
+                        { text: 'Solicitar + información', url: 'mailto:contacto@metodologia.info?subject=Solicitar más información del Coaching de Empoderamiento', type: 'secondary' },
+                        { text: '🚀 Agendar Consulta Gratuita', url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB', type: 'primary' }
+                    ]
+                }
+            },
+            'asistentes-ia': {
+                title: 'Asistentes y Agentes Inteligentes',
+                subtitle: 'Operas con IA que actúa por ti: asistentes personalizados y agentes que ejecutan.',
+                sections: [
+                    {
+                        title: '🤖 IA que Trabaja para Ti',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Asistentes Personalizados',
+                                content: 'Creamos un asistente de IA entrenado en tu conocimiento y procesos, listo para responder y ayudar.'
+                            },
+                            {
+                                title: 'Agentes Autónomos',
+                                content: 'Desarrollamos agentes que ejecutan tareas complejas de forma autónoma, 24/7.'
+                            },
+                            {
+                                title: 'Integración con tus Herramientas',
+                                content: 'Conectamos la IA con tus sistemas actuales (CRM, ERP, etc.) para un flujo de trabajo sin fricciones.'
+                            },
+                            {
+                                title: 'Seguridad y Privacidad',
+                                content: 'Implementamos soluciones seguras que garantizan la privacidad de tu información.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '📈 Casos de Uso Comunes',
+                        type: 'list',
+                        items: [
+                            '💬 Atención al cliente automatizada y personalizada',
+                            '📧 Clasificación y respuesta de correos electrónicos',
+                            '📊 Generación de reportes y análisis de datos',
+                            '📅 Gestión de agenda y programación de citas',
+                            '🔍 Investigación y resumen de información'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Automatiza tu Operación',
+                    subtitle: 'Libera tiempo y recursos con soluciones de IA a medida.',
+                    buttons: [
+                        { text: 'Solicitar + información', url: 'mailto:contacto@metodologia.info?subject=Solicitar más información de Asistentes y Agentes Inteligentes', type: 'secondary' },
+                        { text: '🚀 Agendar Consulta Gratuita', url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB', type: 'primary' }
+                    ]
+                }
+            },
+            'evolucion-sistemas': {
+                title: 'Evolución de Sistemas Existentes',
+                subtitle: 'Optimizas tus sistemas previos de IA para que entreguen más valor con menos esfuerzo.',
+                sections: [
+                    {
+                        title: '🚀 Potencia tu Inversión en IA',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Auditoría de IA',
+                                content: 'Analizamos tu sistema actual para identificar puntos de mejora en rendimiento, coste y eficacia.'
+                            },
+                            {
+                                title: 'Optimización de Modelos',
+                                content: 'Mejoramos tus modelos de IA para que sean más precisos, rápidos y económicos.'
+                            },
+                            {
+                                title: 'Re-entrenamiento y Fine-tuning',
+                                content: 'Actualizamos tus modelos con nuevos datos para mantener su relevancia y precisión.'
+                            },
+                            {
+                                title: 'Integración de Nuevas Capacidades',
+                                content: 'Ampliamos las funcionalidades de tu sistema con las últimas tecnologías de IA.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '✨ ¿Por qué evolucionar tu IA?',
+                        type: 'list',
+                        items: [
+                            '💰 Reducción de costes operativos de la IA',
+                            '📈 Mejora en la precisión y los resultados del sistema',
+                            '🔒 Mayor seguridad y cumplimiento normativo',
+                            '🚀 Ventaja competitiva al estar a la vanguardia',
+                            '😊 Mejor experiencia de usuario para tus clientes y equipo'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Maximiza el Potencial de tu IA',
+                    subtitle: 'Si ya tienes IA, es hora de que trabaje mejor para ti.',
+                    buttons: [
+                        { text: 'Solicitar + información', url: 'mailto:contacto@metodologia.info?subject=Solicitar más información de Evolución de Sistemas Existentes', type: 'secondary' },
+                        { text: '🚀 Agendar Consulta Gratuita', url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB', type: 'primary' }
+                    ]
+                }
+            },
+            'talleres-especializados': {
+                title: 'Talleres Especializados',
+                subtitle: 'Te sumerges en formación práctica con impacto inmediato y guía experta.',
+                sections: [
+                    {
+                        title: '🛠️ Aprender Haciendo',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Contenido a Medida',
+                                content: 'Diseñamos el taller según las necesidades y el contexto específico de tu equipo.'
+                            },
+                            {
+                                title: 'Enfoque Práctico',
+                                content: 'El 80% del tiempo se dedica a la aplicación práctica de los conceptos aprendidos.'
+                            },
+                            {
+                                title: 'Resultados Tangibles',
+                                content: 'Cada taller finaliza con un producto o un plan de acción concreto y aplicable.'
+                            },
+                            {
+                                title: 'Facilitación Experta',
+                                content: 'Guiado por expertos en la materia que aseguran un aprendizaje efectivo y ameno.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '💡 Temáticas Populares',
+                        type: 'list',
+                        items: [
+                            '🤖 Taller de Prompting para Equipos',
+                            '🎨 Taller de Creatividad con IA Generativa',
+                            '📊 Taller de Análisis de Datos con IA',
+                            '🚀 Taller de Design Thinking y Lean Startup',
+                            '🧠 Taller de Liderazgo y Gestión de Equipos'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Potencia a tu Equipo',
+                    subtitle: 'Programas diseñados a medida que elevan capacidades y generan resultados inmediatos.',
+                    buttons: [
+                        { text: 'Solicitar + información', url: 'mailto:contacto@metodologia.info?subject=Solicitar más información de Talleres Especializados', type: 'secondary' },
+                        { text: '🚀 Agendar Consulta Gratuita', url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB', type: 'primary' }
+                    ]
+                }
+            },
+            'charlas-inspiradoras': {
+                title: 'Charlas Inspiradoras',
+                subtitle: 'Conectas con ideas disruptivas que abren conversación y despiertan propósito.',
+                sections: [
+                    {
+                        title: '🎤 Impacto y Motivación',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Contenido Relevante',
+                                content: 'Adaptamos la charla a tu audiencia y a los objetivos de tu evento o reunión.'
+                            },
+                            {
+                                title: 'Narrativa Atractiva',
+                                content: 'Usamos storytelling y ejemplos prácticos para conectar emocionalmente con la audiencia.'
+                            },
+                            {
+                                title: 'Llamada a la Acción',
+                                content: 'Cada charla finaliza con una invitación clara a la acción, para que la inspiración se convierta en movimiento.'
+                            },
+                            {
+                                title: 'Interacción y Dinamismo',
+                                content: 'Fomentamos la participación de la audiencia para una experiencia más memorable y efectiva.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '💡 Temas de Alto Impacto',
+                        type: 'list',
+                        items: [
+                            '🚀 El Futuro del Trabajo y la IA',
+                            '🧠 Mentalidad para la Innovación y la Adaptabilidad',
+                            '🤖 Humanidad y Tecnología: una Alianza Estratégica',
+                            '🎯 Liderazgo en la Era de la Inteligencia Artificial',
+                            '💡 Creatividad y Propósito en un Mundo Automatizado'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Inspira a tu Audiencia',
+                    subtitle: 'Charlas que motivan, educan y activan la transformación.',
+                    buttons: [
+                        { text: 'Solicitar + información', url: 'mailto:contacto@metodologia.info?subject=Solicitar más información de Charlas Inspiradoras', type: 'secondary' },
+                        { text: '🚀 Agendar Consulta Gratuita', url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB', type: 'primary' }
+                    ]
+                }
+            },
+            'diagnostico-cognitivo': {
+                title: 'Diagnóstico Cognitivo y Operativo',
+                subtitle: 'Descubres cuellos de botella y oportunidades invisibles para mejorar rendimiento.',
+                sections: [
+                    {
+                        title: '🔍 Una Mirada Profunda a tu Organización',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Análisis de Procesos',
+                                content: 'Mapeamos tus flujos de trabajo para identificar ineficiencias y puntos de fricción.'
+                            },
+                            {
+                                title: 'Evaluación de Herramientas',
+                                content: 'Analizamos tu stack tecnológico para asegurar que esté alineado con tus objetivos.'
+                            },
+                            {
+                                title: 'Entrevistas y Observación',
+                                content: 'Conversamos con tu equipo para entender la realidad del día a día y la cultura de trabajo.'
+                            },
+                            {
+                                title: 'Análisis de Datos',
+                                content: 'Usamos datos para obtener insights objetivos sobre el rendimiento y las oportunidades.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '✨ Entregables del Diagnóstico',
+                        type: 'list',
+                        items: [
+                            '🗺️ Mapa de oportunidades de mejora priorizadas',
+                            '📈 Informe detallado con hallazgos y recomendaciones',
+                            '🚀 Plan de acción con iniciativas de alto impacto',
+                            '📊 Benchmarking con las mejores prácticas de la industria',
+                            '💡 Sesión de trabajo para presentar y discutir los resultados'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Obtén Claridad para Actuar',
+                    subtitle: 'Un diagnóstico para saber dónde estás y a dónde puedes llegar.',
+                    buttons: [
+                        { text: 'Solicitar + información', url: 'mailto:contacto@metodologia.info?subject=Solicitar más información del Diagnóstico Cognitivo y Operativo', type: 'secondary' },
+                        { text: '🚀 Agendar Consulta Gratuita', url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB', type: 'primary' }
+                    ]
+                }
+            },
+            'estrategia-ia': {
+                title: 'EstrategIA en Acción',
+                subtitle: 'Planificas con IA y marcos de MetodologIA para alinear visión, foco y ejecución.',
+                sections: [
+                    {
+                        title: '🎯 De la Visión a la Ejecución',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Alineación de Visión',
+                                content: 'Facilitamos un proceso para asegurar que todo el equipo directivo comparta una visión común.'
+                            },
+                            {
+                                title: 'Definición de Objetivos',
+                                content: 'Traducimos la visión en objetivos claros, medibles y ambiciosos (OKRs).'
+                            },
+                            {
+                                title: 'Priorización de Iniciativas',
+                                content: 'Usamos un método basado en datos para priorizar las iniciativas de mayor impacto.'
+                            },
+                            {
+                                title: 'Hoja de Ruta Visual',
+                                content: 'Creamos una hoja de ruta clara y visual que comunica la estrategia a toda la organización.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '✨ Beneficios de una Estrategia Clara',
+                        type: 'list',
+                        items: [
+                            '🚀 Foco y alineación en toda la organización',
+                            '📈 Mayor velocidad y calidad en la ejecución',
+                            '💪 Equipos más motivados y con mayor autonomía',
+                            '💰 Mejor asignación de recursos y presupuesto',
+                            '🔄 Capacidad para adaptarse rápidamente a los cambios'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Diseña tu Futuro',
+                    subtitle: 'Una sesión de estrategia para alinear y acelerar tu organización.',
+                    buttons: [
+                        { text: 'Solicitar + información', url: 'mailto:contacto@metodologia.info?subject=Solicitar más información de EstrategIA en Acción', type: 'secondary' },
+                        { text: '🚀 Agendar Consulta Gratuita', url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB', type: 'primary' }
+                    ]
+                }
+            },
+            'experiencia': {
+                title: 'Programa ExperiencIA y Productos Digitales',
+                subtitle: 'Diseña experiencias y soluciones desde un enfoque neurodigital y estratégico',
+                sections: [
+                    {
+                        title: '🎨 Diseño Neurodigital Avanzado',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'UX/UI con IA Integrada',
+                                content: 'Diseñas interfaces que aprenden del comportamiento del usuario y se adaptan en tiempo real.'
+                            },
+                            {
+                                title: 'Prototipado Inteligente',
+                                content: 'Usas IA para generar prototipos, testear usabilidad y optimizar experiencias automáticamente.'
+                            },
+                            {
+                                title: 'Analytics Comportamentales',
+                                content: 'Implementas sistemas que predicen patrones de usuario y optimizan conversiones.'
+                            },
+                            {
+                                title: 'Design Systems Evolutivos',
+                                content: 'Creas sistemas de diseño que se actualizan y mejoran basándose en datos de uso real.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '🚀 Productos que Desarrollas',
+                        type: 'list',
+                        items: [
+                            '📱 App móvil con IA conversacional personalizada',
+                            '🎯 Dashboard adaptativo que evoluciona con el usuario',
+                            '🧠 Sistema de recomendaciones inteligentes',
+                            '⚡ Plataforma digital con optimización automática UX',
+                            '🎨 Herramienta de diseño asistida por IA'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Innova con Diseño Inteligente',
+                    subtitle: 'Para UX/UI, innovadores y líderes de producto digital',
+                    buttons: [
+                        {
+                            text: '🎨 Evaluar mi Portfolio',
+                            url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB',
+                            type: 'primary'
+                        },
+                        {
+                            text: 'Solicitar + información',
+                            url: 'mailto:contacto@metodologia.info?subject=Solicitar más información del Programa ExperiencIA y Productos Digitales',
+                            type: 'secondary'
+                        }
+                    ]
+                }
+            },
+            'desarrollo-software-ia': {
+                title: 'Desarrollo de Software a la Medida',
+                subtitle: 'Creamos software personalizado usando IA en todo el proceso de desarrollo e integrando componentes inteligentes en tu producto final.',
+                sections: [
+                    {
+                        title: '🤖 IA en el Proceso de Desarrollo',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Desarrollo Acelerado',
+                                content: 'Utilizamos IA para generar código, automatizar testing y optimizar arquitecturas, reduciendo tiempos de desarrollo hasta 60%.'
+                            },
+                            {
+                                title: 'Calidad Mejorada',
+                                content: 'IA analiza código en tiempo real para detectar bugs, vulnerabilidades y optimizar performance antes de deployment.'
+                            },
+                            {
+                                title: 'Documentación Automática',
+                                content: 'Generamos documentación técnica y de usuario automáticamente, manteniéndola siempre actualizada.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '⚡ Componentes IA Integrados',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Asistentes Conversacionales',
+                                content: 'Integramos chatbots y asistentes que entienden el contexto específico de tu negocio y usuarios.'
+                            },
+                            {
+                                title: 'Análisis Predictivo',
+                                content: 'Implementamos modelos que anticipan comportamientos, tendencias y necesidades de tus usuarios.'
+                            },
+                            {
+                                title: 'Automatización Inteligente',
+                                content: 'Creamos workflows que se adaptan y optimizan automáticamente basándose en patrones de uso.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '🎯 Casos de Uso Típicos',
+                        type: 'list',
+                        items: [
+                            '📱 Apps móviles con recomendaciones personalizadas por IA',
+                            '🌐 Plataformas web con análisis de comportamiento en tiempo real',
+                            '⚙️ Sistemas de gestión con automatización inteligente de procesos',
+                            '💬 Herramientas de comunicación con asistentes contextuales',
+                            '📊 Dashboards con insights generados automáticamente por IA'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Construye Software Inteligente',
+                    subtitle: 'Desarrollo personalizado con IA nativa y velocidad exponencial.',
+                    buttons: [
+                        { text: 'Solicitar + información', url: 'mailto:contacto@metodologia.info?subject=Solicitar más información del Desarrollo de Software a la Medida', type: 'secondary' },
+                        { text: '🚀 Agendar Consulta Gratuita', url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB', type: 'primary' }
+                    ]
+                }
+            },
+            'coaching-tecnico': {
+                title: 'Coaching Técnico Especializado',
+                subtitle: 'Resuelves bloqueos técnicos complejos y optimizas tu stack tecnológico con metodología probada de alto rendimiento.',
+                sections: [
+                    {
+                        title: '🔧 Metodología de Resolución Técnica',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Diagnóstico de Bloqueos',
+                                content: 'Aplicamos el framework de "Fricción Invisible" para identificar los puntos exactos donde tu flujo técnico se interrumpe y consume energía innecesaria.'
+                            },
+                            {
+                                title: 'Rediseño de Procesos',
+                                content: 'Implementamos principios de "Trabajo sin Fricción" para eliminar micro-interrupciones y optimizar tu concentración profunda en tareas complejas.'
+                            },
+                            {
+                                title: 'Automatización Inteligente',
+                                content: 'Diseñamos sistemas que operan de forma autónoma, liberando tu tiempo para trabajo de alto valor usando IA como palanca de impacto.'
+                            },
+                            {
+                                title: 'Artesanía Técnica',
+                                content: 'Desarrollamos tu "Craftsmanship" técnico, transformando la obsesión destructiva en búsqueda virtuosa de excelencia sostenible.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '⚡ Playbooks Aplicados',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Del Automatismo a la Presencia',
+                                content: 'Pasas de reaccionar automáticamente a problemas técnicos a responder con intención y claridad estratégica.'
+                            },
+                            {
+                                title: 'De Días Caóticos a Jornadas Inteligentes',
+                                content: 'Construyes una estructura de trabajo tan robusta que transformas la incertidumbre técnica en oportunidad de innovación.'
+                            },
+                            {
+                                title: 'De Efectivo a Alto Rendimiento',
+                                content: 'Rediseñas el criterio de excelencia técnica, creando tu propio juego de estándares superiores.'
+                            },
+                            {
+                                title: 'De Cumplir a Entregar Excelencia',
+                                content: 'Transformas tus entregables técnicos de simples documentos a experiencias memorables que construyen autoridad.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '🎯 Áreas de Especialización',
+                        type: 'list',
+                        items: [
+                            '🔧 Resolución de bloqueos de arquitectura y performance',
+                            '⚙️ Optimización de flujos de desarrollo y CI/CD',
+                            '🤖 Integración de IA en sistemas existentes',
+                            '📊 Implementación de métricas y observabilidad',
+                            '🔒 Mejora de seguridad y compliance técnico',
+                            '🚀 Escalabilidad y optimización de recursos'
+                        ]
+                    },
+                    {
+                        title: '💡 Metodología de Intervención',
+                        type: 'list',
+                        items: [
+                            '🔍 Auditoría técnica profunda usando prompts especializados',
+                            '📋 Diseño de soluciones con framework de "Intención sobre Intensidad"',
+                            '⚡ Implementación iterativa con medición de impacto',
+                            '🔄 Acompañamiento en la adopción y refinamiento continuo',
+                            '📈 Documentación de patrones y mejores prácticas'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Resuelve tus Bloqueos Técnicos',
+                    subtitle: 'Sesiones personalizadas para equipos técnicos y desarrolladores que buscan excelencia.',
+                    buttons: [
+                        { text: 'Solicitar + información', url: 'mailto:contacto@metodologia.info?subject=Solicitar más información del Coaching Técnico Especializado', type: 'secondary' },
+                        { text: '🚀 Agendar Consulta Gratuita', url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB', type: 'primary' }
+                    ]
+                }
+            },
+            'bootcamp-prototipado': {
+                title: 'Bootcamp Prototipado de Productos Digitales con IA',
+                subtitle: 'Aceleras tu ciclo de innovación: de concepto a prototipo validado en semanas usando IA como co-piloto creativo.',
+                sections: [
+                    {
+                        title: '🚀 Metodología de Prototipado Acelerado',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Del Concepto al Prototipo en 21 Días',
+                                content: 'Aplicamos el framework "De Trabajo Duro a Sin Fricción" para eliminar obstáculos en el proceso de prototipado y acelerar la validación de ideas.'
+                            },
+                            {
+                                title: 'IA como Co-piloto Creativo',
+                                content: 'Integras herramientas de IA para generar ideas, diseñar interfaces y optimizar experiencias de usuario de forma exponencialmente más rápida.'
+                            },
+                            {
+                                title: 'Validación Iterativa Inteligente',
+                                content: 'Implementas sistemas de feedback automático que te permiten iterar y mejorar prototipos basándose en datos reales de usuario.'
+                            },
+                            {
+                                title: 'Prototipado de Alta Fidelidad',
+                                content: 'Creas prototipos que no solo se ven profesionales, sino que funcionan como productos reales, reduciendo la brecha entre concepto y realidad.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '⚡ Playbooks Aplicados',
+                        type: 'grid',
+                        items: [
+                            {
+                                title: 'Del Automatismo a la Presencia',
+                                content: 'Pasas de prototipar por inercia a diseñar con intención estratégica, enfocándote en resolver problemas reales del usuario.'
+                            },
+                            {
+                                title: 'De Trabajo Duro a Sin Fricción',
+                                content: 'Eliminas las fricciones invisibles en tu proceso de diseño, creando un flujo de trabajo que maximiza la creatividad y minimiza el esfuerzo.'
+                            },
+                            {
+                                title: 'De Días Caóticos a Jornadas Inteligentes',
+                                content: 'Estructuras tu tiempo de prototipado en bloques de alta concentración que maximizan la calidad y velocidad de tus entregables.'
+                            },
+                            {
+                                title: 'De Efectivo a Alto Rendimiento',
+                                content: 'Elevas tus estándares de prototipado, creando experiencias que no solo funcionan, sino que deleitan y sorprenden a los usuarios.'
+                            }
+                        ]
+                    },
+                    {
+                        title: '🎯 Competencias Desarrolladas',
+                        type: 'list',
+                        items: [
+                            '🎨 Diseño de interfaces con IA integrada y adaptativa',
+                            '⚡ Prototipado inteligente con herramientas de IA generativa',
+                            '📊 Analytics comportamentales y optimización automática',
+                            '🔧 Design Systems evolutivos basados en datos',
+                            '🚀 Validación rápida con usuarios reales',
+                            '💡 Iteración continua basada en feedback automático'
+                        ]
+                    },
+                    {
+                        title: '💡 Metodología de Aprendizaje',
+                        type: 'list',
+                        items: [
+                            '🔍 Diagnóstico de tu proceso actual de prototipado',
+                            '📋 Diseño de un flujo de trabajo optimizado con IA',
+                            '⚡ Implementación práctica con proyectos reales',
+                            '🔄 Iteración y refinamiento continuo',
+                            '📈 Medición de impacto y mejora de resultados'
+                        ]
+                    }
+                ],
+                cta: {
+                    title: 'Acelera tu Innovación',
+                    subtitle: '21 días para dominar el prototipado con IA y validar ideas 10x más rápido.',
+                    buttons: [
+                        { text: 'Solicitar + información', url: 'mailto:contacto@metodologia.info?subject=Solicitar más información del Bootcamp de Prototipado', type: 'secondary' },
+                        { text: '🚀 Agendar Consulta Gratuita', url: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB', type: 'primary' }
+                    ]
+                }
+            }
+        };
+
+        function openServiceModal(serviceId) {
+            const modal = document.getElementById('serviceModal');
+            const modalContent = document.getElementById('modalContent');
+            const serviceData = serviceModalData[serviceId];
+            
+            if (!serviceData) return;
+            
+            let contentHTML = `
+                <h2 class="modal-title">${serviceData.title}</h2>
+                <p style="color: var(--text-secondary); font-size: 1.1rem; margin-bottom: var(--space-xl); line-height: var(--ratio-major);">
+                    ${serviceData.subtitle}
+                </p>
+            `;
+            
+            serviceData.sections.forEach(section => {
+                contentHTML += `<div class="modal-section">`;
+                contentHTML += `<h3 class="modal-section-title">${section.title}</h3>`;
+                
+                if (section.type === 'grid') {
+                    contentHTML += `<div class="modal-content-grid">`;
+                    section.items.forEach(item => {
+                        contentHTML += `
+                            <div class="modal-content-item">
+                                <h4>${item.title}</h4>
+                                <p>${item.content}</p>
+                            </div>
+                        `;
+                    });
+                    contentHTML += `</div>`;
+                } else if (section.type === 'list') {
+                    contentHTML += `<ul class="modal-benefits-list">`;
+                    section.items.forEach(item => {
+                        const [icon, ...textParts] = item.split(' ');
+                        contentHTML += `
+                            <li>
+                                <span class="benefit-icon">${icon}</span>
+                                <span>${textParts.join(' ')}</span>
+                            </li>
+                        `;
+                    });
+                    contentHTML += `</ul>`;
+                }
+                
+                contentHTML += `</div>`;
+            });
+            
+            if (serviceData.cta) {
+                contentHTML += `
+                    <div class="modal-cta-section">
+                        <h3>${serviceData.cta.title}</h3>
+                        <p>${serviceData.cta.subtitle}</p>
+                        <div class="modal-cta-buttons">
+                `;
+                
+                serviceData.cta.buttons.forEach(button => {
+                    const btnClass = button.type === 'primary' ? 'btn btn-primary' : 'btn btn-secondary';
+                    contentHTML += `
+                        <a href="${button.url}" target="_blank" rel="noopener noreferrer" class="${btnClass}">
+                            ${button.text}
+                        </a>
+                    `;
+                });
+                
+                contentHTML += `
+                        </div>
+                    </div>
+                `;
+            }
+            
+            modalContent.innerHTML = contentHTML;
+            modal.classList.add('active');
+            
+            // Recreate icons after content update
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+            
+            // Prevent body scroll
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeServiceModal() {
+            const modal = document.getElementById('serviceModal');
+            modal.classList.remove('active');
+            
+            // Restore body scroll
+            document.body.style.overflow = '';
+        }
+
+        // Close modal on escape key or clicking overlay
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeServiceModal();
+            }
+        });
+
+        document.getElementById('serviceModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeServiceModal();
+            }
+        });
+
+        // Initialize
+        updateCarousel();
+        
+        // Add screen reader only class
+        const style = document.createElement('style');
+        style.textContent = `
+            .sr-only {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                padding: 0;
+                margin: -1px;
+                overflow: hidden;
+                clip: rect(0, 0, 0, 0);
+                white-space: nowrap;
+                border: 0;
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+
+    <!-- Modal de Agendamiento - Segundo 42 -->
+    <div class="modal fixed inset-0 z-[1100] items-center justify-center p-4 hidden" id="modal-agendamiento-42" aria-modal="true" role="dialog">
+        <div class="fixed inset-0 bg-black/80 backdrop-blur-sm" data-modal-backdrop></div>
+        <div class="relative mx-auto my-8 w-full max-w-4xl bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 border border-yellow-400/30 rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto backdrop-blur-xl">
+            <!-- Header con efecto glassmorphism -->
+            <div class="flex items-start justify-between gap-4 mb-8">
+                <div class="flex items-center gap-4">
+                    <div class="w-16 h-16 bg-gradient-to-br from-yellow-400 to-orange-400 rounded-2xl flex items-center justify-center shadow-lg">
+                        <i data-lucide="calendar" class="w-8 h-8 text-slate-900"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-3xl font-bold text-white mb-2">¡Agendemos nuestra primera conversación!</h3>
+                        <p class="text-yellow-300 text-lg">Sesión estratégica personalizada</p>
+                    </div>
+                </div>
+                <button class="w-10 h-10 bg-slate-800/50 hover:bg-slate-700/50 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-all duration-300 backdrop-blur-sm" data-modal-close>
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <!-- Contenido principal -->
+            <div class="space-y-8">
+                <!-- Mensaje principal -->
+                <div class="text-center">
+                    <p class="text-xl text-gray-200 mb-4">(R)Evolucione su organización con <span class="text-yellow-400 font-bold">Metodolog<span class="text-cyan-400">IA</span></span></p>
+                    <p class="text-gray-300">Sesión de 1 hora para identificar oportunidades de <span class="text-cyan-400 font-semibold">IA</span> y alto rendimiento</p>
+                </div>
+                
+                <!-- Opciones de agendamiento -->
+                <div class="grid md:grid-cols-2 gap-6">
+                    <!-- Franja Estándar -->
+                    <div class="bg-gradient-to-br from-blue-900/40 to-slate-800/40 p-6 rounded-2xl border border-blue-500/30 backdrop-blur-sm hover:border-blue-400/50 transition-all duration-300 group">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                                <i data-lucide="clock" class="w-6 h-6 text-blue-400"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-xl font-bold text-white">Consulta Gratuita</h4>
+                                <p class="text-blue-300 text-sm">Confirmación en 24-48h</p>
+                            </div>
+                        </div>
+                        <div class="bg-green-900/30 border border-green-500/30 rounded-lg p-3 mb-4">
+                            <div class="flex items-center gap-2 mb-2">
+                                <i data-lucide="gift" class="w-4 h-4 text-green-400"></i>
+                                <span class="text-green-300 font-semibold text-sm">SIN COSTO - SIN COMPROMISO</span>
+                            </div>
+                            <p class="text-green-200 text-xs">Primera asesoría de naturaleza normal</p>
+                        </div>
+                        <ul class="text-gray-300 space-y-2 mb-6">
+                            <li class="flex items-center gap-2">
+                                <i data-lucide="check" class="w-4 h-4 text-green-400"></i>
+                                <span>Diagnóstico de oportunidades de <span class="text-cyan-400 font-semibold">IA</span></span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <i data-lucide="check" class="w-4 h-4 text-green-400"></i>
+                                <span>Análisis de formas de trabajo actuales</span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <i data-lucide="check" class="w-4 h-4 text-green-400"></i>
+                                <span>Roadmap personalizado de (R)Evolución</span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <i data-lucide="check" class="w-4 h-4 text-green-400"></i>
+                                <span>Estrategia de implementación práctica</span>
+                            </li>
+                        </ul>
+                        <button onclick="agendarFranjaEstandar()" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg">
+                            <i data-lucide="calendar" class="w-5 h-5 inline mr-2"></i>
+                            Agendar Franja Estándar
+                        </button>
+                        <p class="text-xs text-gray-400 mt-2 text-center">Horarios estándar en zona horaria de Colombia (GMT-5).<br><strong>En el agendamiento estandar, la disponibilidad es de lunes a miercoles con cupos limitados.</strong></p>
+                    </div>
+                    
+                    <!-- Franja Especial -->
+                    <div class="bg-gradient-to-br from-purple-900/40 to-slate-800/40 p-6 rounded-2xl border border-purple-500/30 backdrop-blur-sm hover:border-purple-400/50 transition-all duration-300 group">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
+                                <i data-lucide="star" class="w-6 h-6 text-purple-400"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-xl font-bold text-white">Sesión Premium</h4>
+                                <p class="text-purple-300 text-sm">Confirmación en 2-4 horas</p>
+                            </div>
+                        </div>
+                        <div class="bg-yellow-900/30 border border-yellow-500/30 rounded-lg p-3 mb-4">
+                            <div class="flex items-center gap-2 mb-2">
+                                <i data-lucide="zap" class="w-4 h-4 text-yellow-400"></i>
+                                <span class="text-yellow-300 font-semibold text-sm">PRIORIDAD ALTA</span>
+                            </div>
+                            <p class="text-yellow-200 text-xs">Para proyectos urgentes o ejecutivos</p>
+                        </div>
+                        <ul class="text-gray-300 space-y-2 mb-6">
+                            <li class="flex items-center gap-2">
+                                <i data-lucide="check" class="w-4 h-4 text-purple-400"></i>
+                                <span>Todo lo de la consulta gratuita +</span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <i data-lucide="check" class="w-4 h-4 text-purple-400"></i>
+                                <span>Análisis profundo de arquitectura actual</span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <i data-lucide="check" class="w-4 h-4 text-purple-400"></i>
+                                <span>Prototipo de solución con <span class="text-cyan-400 font-semibold">IA</span></span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <i data-lucide="check" class="w-4 h-4 text-purple-400"></i>
+                                <span>Plan de implementación detallado</span>
+                            </li>
+                        </ul>
+                        <button onclick="agendarFranjaEspecial()" class="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg">
+                            <i data-lucide="zap" class="w-5 h-5 inline mr-2"></i>
+                            Agendar Franja Especial
+                        </button>
+                        <p class="text-xs text-gray-400 mt-2 text-center">Disponible también fines de semana<br>y horarios extendidos</p>
+                    </div>
+                </div>
+                
+                <!-- Opción Presencial -->
+                <div class="bg-gradient-to-br from-green-900/40 to-slate-800/40 p-6 rounded-2xl border border-green-500/30 backdrop-blur-sm">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
+                            <i data-lucide="map-pin" class="w-6 h-6 text-green-400"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-bold text-white">¿Prefiere Presencial?</h4>
+                            <p class="text-gray-300 text-sm">Valle de Aburrá y regiones superiores</p>
+                        </div>
+                    </div>
+                    <p class="text-gray-300 mb-4">Para equipos que prefieren la interacción cara a cara y necesitan un análisis más profundo de su entorno de trabajo.</p>
+                    <button onclick="agendarPresencial()" class="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg">
+                        <i data-lucide="map-pin" class="w-5 h-5 inline mr-2"></i>
+                        Agendar Sesión Presencial
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Función para inicializar el popup de agendamiento
+        function initSchedulingPopup() {
+            let popupShown = false;
+            let timeOnPage = 0;
+            
+            const checkPopupConditions = () => {
+                timeOnPage += 1;
+                
+                // Mostrar popup después de 42 segundos si no se ha mostrado
+                if (timeOnPage >= 42 && !popupShown) {
+                    const modal = document.getElementById('modal-agendamiento-42');
+                    if (modal) {
+                        modal.classList.remove('hidden');
+                        modal.classList.add('flex');
+                        popupShown = true;
+                        
+                        // Re-inicializar iconos para el modal
+                        requestIdleCallback(() => {
+                            if (typeof lucide !== 'undefined') {
+                                lucide.createIcons({
+                                    nodes: Array.from(modal.querySelectorAll('[data-lucide]'))
+                                });
+                            }
+                        });
+                    }
+                }
+            };
+            
+            // Verificar cada segundo
+            const popupInterval = setInterval(checkPopupConditions, 1000);
+            
+            // Limpiar intervalo cuando se cierre el popup
+            document.addEventListener('click', (e) => {
+                if (e.target.closest('[data-modal-close]') && e.target.closest('.modal') === document.getElementById('modal-agendamiento-42')) {
+                    clearInterval(popupInterval);
+                }
+            });
+        }
+
+        // Funciones de agendamiento
+        function agendarFranjaEstandar() {
+            const url = 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ3a17Qg-4a4zvXQTVEOLr7VkUVnvBG8kxCxZEdwCj2RqqxO16HmtlUj4QdZq7GGAqOefkFoVmjB';
+            window.open(url, '_blank', 'noopener,noreferrer');
+        }
+
+        function agendarFranjaEspecial() {
+            const subject = encodeURIComponent('Solicitud de Sesión Premium - MetodologIA');
+            const body = encodeURIComponent('Hola, me interesa agendar una sesión premium para analizar oportunidades de IA en mi organización. Por favor, indíqueme disponibilidad para horarios especiales.');
+            const url = `mailto:contacto@metodologia.info?subject=${subject}&body=${body}`;
+            window.location.href = url;
+        }
+
+        function agendarPresencial() {
+            const subject = encodeURIComponent('Solicitud de Agendamiento Presencial - Valle de Aburrá');
+            const body = encodeURIComponent(`Hola equipo de MetodologIA,
+
+Me interesa agendar una sesión presencial en el Valle de Aburrá o región superior.
+
+**INFORMACIÓN SOLICITADA:**
+- Nombre completo: [COMPLETAR]
+- Empresa: [COMPLETAR]
+- Teléfono: [COMPLETAR]
+- Email: [COMPLETAR]
+- Preferencia de horario: [COMPLETAR]
+- Modalidad: Virtual (presencial solo en Valle de Aburrá)
+
+**DETALLES ADICIONALES:**
+- ¿Cuál es el principal desafío que enfrenta su organización?
+- ¿Qué resultados específicos espera lograr?
+- ¿Cuántas personas participarán en la sesión?
+
+Gracias por su atención.`);
+            const url = `mailto:contacto@metodologia.info?subject=${subject}&body=${body}`;
+            window.location.href = url;
+        }
+
+        // Función unificada para cerrar modales
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                document.body.style.overflow = '';
+                
+                // Re-inicializar iconos después de cerrar
+                requestIdleCallback(() => {
+                    if (typeof lucide !== 'undefined') {
+                        lucide.createIcons();
+                    }
+                });
+            }
+        }
+
+        // Inicializar el popup cuando el DOM esté listo
+        document.addEventListener('DOMContentLoaded', function() {
+            initSchedulingPopup();
+        });
+    </script>
+</body>
+</html>
